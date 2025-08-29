@@ -128,7 +128,29 @@ cd driver-management
 
 # Install dependencies
 print_status "Installing application dependencies..."
-npm run install:all
+if ! npm run install:all; then
+    print_warning "Standard installation failed, trying with legacy peer deps..."
+    if ! npm install --legacy-peer-deps; then
+        print_error "Root dependencies installation failed"
+        exit 1
+    fi
+    
+    print_status "Installing client dependencies..."
+    cd client
+    if ! npm install --legacy-peer-deps; then
+        print_error "Client dependencies installation failed"
+        exit 1
+    fi
+    cd ..
+    
+    print_status "Installing server dependencies..."
+    cd server
+    if ! npm install; then
+        print_error "Server dependencies installation failed"
+        exit 1
+    fi
+    cd ..
+fi
 
 # Create environment file
 print_status "Creating environment configuration..."
