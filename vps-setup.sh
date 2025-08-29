@@ -35,7 +35,15 @@ print_error() {
 # Check if running as root
 if [[ $EUID -eq 0 ]]; then
    print_error "This script should not be run as root. Please run as a regular user with sudo privileges."
-   exit 1
+   print_warning "If you only have root access, you can create a user with: adduser deploy && usermod -aG sudo deploy"
+   print_warning "Then switch to that user with: su - deploy"
+   print_warning "Or run with --allow-root flag to bypass this check (not recommended)"
+   
+   if [[ "$1" != "--allow-root" ]]; then
+       exit 1
+   else
+       print_warning "Running as root with --allow-root flag (not recommended for production)"
+   fi
 fi
 
 # Configuration - Update these with your details
