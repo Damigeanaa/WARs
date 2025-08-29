@@ -178,7 +178,7 @@ npm run build
 
 # Create PM2 ecosystem file
 print_status "Creating PM2 configuration..."
-cat > ecosystem.config.js << EOF
+cat > ecosystem.config.cjs << EOF
 module.exports = {
   apps: [{
     name: 'driver-management-api',
@@ -205,7 +205,7 @@ mkdir -p logs
 
 # Start application with PM2
 print_status "Starting application with PM2..."
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 pm2 startup
 pm2 save
 

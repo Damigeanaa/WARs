@@ -193,10 +193,10 @@ chmod 666 database.db
 
 ```bash
 # Create PM2 configuration
-nano ecosystem.config.js
+nano ecosystem.config.cjs
 ```
 
-**ecosystem.config.js:**
+**ecosystem.config.cjs:**
 ```javascript
 module.exports = {
   apps: [{
@@ -226,7 +226,7 @@ module.exports = {
 mkdir -p logs
 
 # Start application
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 
 # Save PM2 configuration
 pm2 save
