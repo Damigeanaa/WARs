@@ -94,6 +94,26 @@ sudo chown -R $USER:$USER /var/www/driver-management
 cd driver-management
 ```
 
+**Note**: If you encounter authentication issues:
+
+#### Option A: Make Repository Public (Easiest)
+1. Go to your GitHub repository settings
+2. Scroll down to "Danger Zone"
+3. Click "Change repository visibility" → "Make public"
+
+#### Option B: Use Personal Access Token
+1. Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+2. Generate new token with `repo` scope
+3. Use token instead of password:
+```bash
+sudo git clone https://YOUR_TOKEN@github.com/Damigeanaa/WARs.git driver-management
+```
+
+#### Option C: Use SSH Keys
+1. Generate SSH key: `ssh-keygen -t rsa -b 4096 -C "your_email@example.com"`
+2. Add to GitHub: Settings → SSH and GPG keys → New SSH key
+3. Clone with SSH: `sudo git clone git@github.com:Damigeanaa/WARs.git driver-management`
+
 ### 2. Install Dependencies
 
 ```bash

@@ -51,11 +51,13 @@ REPO_URL="https://github.com/Damigeanaa/WARs.git"
 DOMAIN_NAME="driverconnected.de"
 
 # Optional: Allow override via command line arguments
-if [ "$1" != "" ]; then
+if [ "$1" != "" ] && [ "$1" != "--allow-root" ]; then
     REPO_URL="$1"
 fi
 if [ "$2" != "" ]; then
     DOMAIN_NAME="$2"
+elif [ "$1" != "" ] && [ "$1" != "--allow-root" ] && [ "$2" == "" ]; then
+    DOMAIN_NAME="driverconnected.de"
 fi
 
 echo "🔗 Repository: $REPO_URL"
@@ -102,7 +104,25 @@ sudo ufw --force enable
 # Clone repository
 print_status "Cloning repository from GitHub..."
 cd /var/www
-sudo git clone "$REPO_URL" driver-management
+
+# Try to clone the repository
+if ! sudo git clone "$REPO_URL" driver-management; then
+    print_error "Failed to clone repository. This might be due to:"
+    print_error "1. Repository is private and requires authentication"
+    print_error "2. Invalid repository URL"
+    print_error ""
+    print_status "Solutions:"
+    print_status "1. Make repository public on GitHub"
+    print_status "2. Use Personal Access Token (PAT) instead of password"
+    print_status "3. Set up SSH keys for authentication"
+    print_status ""
+    print_status "For PAT authentication, use:"
+    print_status "git clone https://YOUR_PAT@github.com/Damigeanaa/WARs.git"
+    print_status ""
+    print_status "Or manually clone the repository first, then re-run this script"
+    exit 1
+fi
+
 sudo chown -R $USER:$USER /var/www/driver-management
 cd driver-management
 
