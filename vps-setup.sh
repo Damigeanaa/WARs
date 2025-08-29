@@ -38,9 +38,20 @@ if [[ $EUID -eq 0 ]]; then
    exit 1
 fi
 
-# Get user input
-read -p "Enter your GitHub repository URL (e.g., https://github.com/username/repo.git): " REPO_URL
-read -p "Enter your domain name (or press Enter to skip SSL setup): " DOMAIN_NAME
+# Configuration - Update these with your details
+REPO_URL="https://github.com/Damigeanaa/WARs.git"
+DOMAIN_NAME="driverconnected.de"
+
+# Optional: Allow override via command line arguments
+if [ "$1" != "" ]; then
+    REPO_URL="$1"
+fi
+if [ "$2" != "" ]; then
+    DOMAIN_NAME="$2"
+fi
+
+echo "🔗 Repository: $REPO_URL"
+echo "🌐 Domain: $DOMAIN_NAME"
 
 print_status "Starting VPS setup..."
 
@@ -102,8 +113,11 @@ sed -i 's|DATABASE_PATH=./database.db|DATABASE_PATH=/var/www/driver-management/s
 
 if [ ! -z "$DOMAIN_NAME" ]; then
     sed -i "s|CORS_ORIGIN=http://localhost:5173|CORS_ORIGIN=https://$DOMAIN_NAME|" .env
+    echo "🔗 Application URL: https://$DOMAIN_NAME"
 else
     sed -i "s|CORS_ORIGIN=http://localhost:5173|CORS_ORIGIN=*|" .env
+    SERVER_IP=$(curl -s ipinfo.io/ip)
+    echo "🔗 Application URL: http://$SERVER_IP"
 fi
 
 print_warning "Please update the JWT_SECRET in .env file for production security!"

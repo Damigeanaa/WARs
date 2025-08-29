@@ -88,8 +88,8 @@ sudo ufw status
 # Navigate to web directory
 cd /var/www
 
-# Clone your repository (replace with your GitHub repo URL)
-sudo git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git driver-management
+# Clone your repository
+sudo git clone https://github.com/Damigeanaa/WARs.git driver-management
 sudo chown -R $USER:$USER /var/www/driver-management
 cd driver-management
 ```
@@ -133,7 +133,7 @@ JWT_SECRET=your-super-strong-random-jwt-secret-key-here
 JWT_EXPIRES_IN=7d
 
 # CORS Configuration (update with your domain)
-CORS_ORIGIN=https://your-domain.com
+CORS_ORIGIN=https://driverconnected.de
 
 # Security
 BCRYPT_ROUNDS=12
@@ -229,7 +229,7 @@ sudo nano /etc/nginx/sites-available/driver-management
 ```nginx
 server {
     listen 80;
-    server_name your-domain.com www.your-domain.com;  # Replace with your domain
+    server_name driverconnected.de www.driverconnected.de;
 
     # Client files (React build)
     location / {
@@ -305,8 +305,8 @@ sudo apt install -y certbot python3-certbot-nginx
 ### 2. Obtain SSL Certificate
 
 ```bash
-# Get certificate (replace with your domain)
-sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+# Get certificate for driverconnected.de
+sudo certbot --nginx -d driverconnected.de -d www.driverconnected.de
 
 # Test auto-renewal
 sudo certbot renew --dry-run
