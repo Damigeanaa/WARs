@@ -138,4 +138,9 @@
   .py-mobile {
     @apply py-4 sm:py-6;
   }
+
+  /* Dynamic color utilities for schedule settings */
+  .dynamic-color {
+    background-color: var(--dynamic-color);
+  }
 }

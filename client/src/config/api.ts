@@ -35,6 +35,15 @@ export const API_ENDPOINTS = {
   notificationRead: (id: string) => `${API_BASE_URL}/api/notifications/${id}/read`,
   notificationsReadAll: `${API_BASE_URL}/api/notifications/read-all`,
   
+  // Working Tours
+  workingTours: `${API_BASE_URL}/api/working-tours`,
+  workingTourById: (id: string) => `${API_BASE_URL}/api/working-tours/${id}`,
+  workingToursBulk: `${API_BASE_URL}/api/working-tours/bulk`,
+  
+  // Schedules
+  schedules: `${API_BASE_URL}/api/schedules`,
+  schedulesBulk: `${API_BASE_URL}/api/schedules/bulk`,
+  
   // Auth
   login: `${API_BASE_URL}/api/auth/login`,
   logout: `${API_BASE_URL}/api/auth/logout`,

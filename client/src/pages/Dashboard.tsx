@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -58,6 +59,7 @@ interface HolidayRequest {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   // Auto-refresh functionality  
   const { isEnabled } = useDashboardAutoRefresh(true)
@@ -123,36 +125,36 @@ export default function Dashboard() {
 
   const metrics = [
     {
-      title: 'Total Drivers',
+      title: t('dashboard.totalDrivers'),
       value: isLoading ? '...' : stats.totalDrivers.toString(),
       icon: Users,
       change: stats.activeDrivers,
       changeType: 'neutral' as const,
-      description: `${stats.activeDrivers} active`
+      description: t('dashboard.activeDriversCount', { count: stats.activeDrivers })
     },
     {
-      title: 'Active Warnings',
+      title: t('dashboard.activeWarnings'),
       value: isLoading ? '...' : stats.activeWarnings.toString(),
       icon: AlertTriangle,
       change: stats.highSeverityWarnings,
       changeType: stats.highSeverityWarnings > 0 ? 'negative' as const : 'positive' as const,
-      description: `${stats.highSeverityWarnings} high severity`
+      description: t('dashboard.highSeverityCount', { count: stats.highSeverityWarnings })
     },
     {
-      title: 'Holiday Requests',
+      title: t('dashboard.holidayRequests'),
       value: isLoading ? '...' : stats.pendingHolidays.toString(),
       icon: Calendar,
       change: stats.approvedHolidays,
       changeType: 'neutral' as const,
-      description: `${stats.approvedHolidays} approved`
+      description: t('dashboard.approvedHolidaysCount', { count: stats.approvedHolidays })
     },
     {
-      title: 'Performance Score',
+      title: t('dashboard.performanceScore'),
       value: isLoading ? '...' : Math.round(((stats.totalDrivers - stats.highSeverityWarnings) / Math.max(stats.totalDrivers, 1)) * 100).toString() + '%',
       icon: Award,
       change: stats.highSeverityWarnings === 0 ? 5 : -stats.highSeverityWarnings,
       changeType: stats.highSeverityWarnings === 0 ? 'positive' as const : 'negative' as const,
-      description: 'Overall fleet health'
+      description: t('dashboard.overallFleetHealth')
     }
   ]
 
@@ -165,21 +167,21 @@ export default function Dashboard() {
           <div className="text-center mb-12">
             <div className="inline-flex items-center space-x-2 bg-indigo-50 border border-indigo-200 rounded-full px-4 py-2 mb-6">
               <BarChart3 className="h-4 w-4 text-indigo-600" />
-              <span className="text-sm font-medium text-indigo-700">Real-time Analytics</span>
-              <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Live</Badge>
+              <span className="text-sm font-medium text-indigo-700">{t('dashboard.realTimeAnalytics')}</span>
+              <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">{t('dashboard.live')}</Badge>
             </div>
             
             <h1 className="text-4xl font-bold text-slate-900 mb-4">
-              Fleet Management Dashboard
+              {t('dashboard.title')}
             </h1>
             <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-              Monitor your fleet performance, driver status, and operational metrics in real-time.
+              {t('dashboard.description')}
             </p>
             
             <div className="flex items-center justify-center gap-2 mt-6">
               <div className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-green-500' : 'bg-slate-400'}`} />
               <span className="text-sm text-slate-600">
-                {isEnabled ? 'Auto-refresh enabled' : 'Auto-refresh disabled'} • Updates every 30 seconds
+                {isEnabled ? t('dashboard.autoRefreshEnabled') : t('dashboard.autoRefreshDisabled')} • {t('dashboard.updatesEvery30Seconds')}
               </span>
             </div>
           </div>
@@ -220,7 +222,7 @@ export default function Dashboard() {
                       <>
                         <Activity className="mr-1 h-4 w-4 text-indigo-500" />
                         <span className="text-sm text-indigo-600 font-medium">
-                          {Math.abs(metric.change)} active
+                          {t('dashboard.activeCount', { count: Math.abs(metric.change) })}
                         </span>
                       </>
                     )}
@@ -241,9 +243,9 @@ export default function Dashboard() {
                       <AlertTriangle className="h-5 w-5 text-orange-600" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg text-slate-900">Recent Warnings</CardTitle>
+                      <CardTitle className="text-lg text-slate-900">{t('dashboard.recentWarnings')}</CardTitle>
                       <CardDescription className="text-slate-600">
-                        Latest driver warnings requiring attention
+                        {t('dashboard.latestDriverWarnings')}
                       </CardDescription>
                     </div>
                   </div>
@@ -253,7 +255,7 @@ export default function Dashboard() {
                     onClick={() => navigate('/warnings')}
                     className="border-slate-300 hover:border-orange-300 hover:bg-orange-50"
                   >
-                    View All
+                    {t('dashboard.viewAll')}
                     <ArrowUpRight className="ml-1 h-4 w-4" />
                   </Button>
                 </div>
@@ -263,13 +265,13 @@ export default function Dashboard() {
                   {isLoading ? (
                     <div className="text-center text-slate-500 py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-                      Loading warnings...
+                      {t('dashboard.loadingWarnings')}
                     </div>
                   ) : recentWarnings.length === 0 ? (
                     <div className="text-center text-slate-500 py-8">
                       <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                      <p className="font-medium">No recent warnings</p>
-                      <p className="text-sm">Your fleet is performing well!</p>
+                      <p className="font-medium">{t('dashboard.noRecentWarnings')}</p>
+                      <p className="text-sm">{t('dashboard.fleetPerformingWell')}</p>
                     </div>
                   ) : (
                     recentWarnings.map((warning) => {
@@ -282,7 +284,7 @@ export default function Dashboard() {
                             </div>
                             <div className="flex-1">
                               <p className="font-semibold text-slate-900">
-                                {driver?.name || 'Unknown Driver'}
+                                {driver?.name || t('dashboard.unknownDriver')}
                               </p>
                               <p className="text-sm text-slate-600">
                                 {warning.warning_type}
@@ -323,9 +325,9 @@ export default function Dashboard() {
                       <Calendar className="h-5 w-5 text-green-600" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg text-slate-900">Holiday Requests</CardTitle>
+                      <CardTitle className="text-lg text-slate-900">{t('dashboard.holidayRequests')}</CardTitle>
                       <CardDescription className="text-slate-600">
-                        Recent booking requests
+                        {t('dashboard.recentBookingRequests')}
                       </CardDescription>
                     </div>
                   </div>
@@ -344,13 +346,13 @@ export default function Dashboard() {
                   {isLoading ? (
                     <div className="text-center text-slate-500 py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-                      Loading requests...
+                      {t('dashboard.loadingRequests')}
                     </div>
                   ) : recentHolidayRequests.length === 0 ? (
                     <div className="text-center text-slate-500 py-8">
                       <Calendar className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-                      <p className="font-medium">No recent requests</p>
-                      <p className="text-sm">All caught up!</p>
+                      <p className="font-medium">{t('dashboard.noRecentRequests')}</p>
+                      <p className="text-sm">{t('dashboard.allCaughtUp')}</p>
                     </div>
                   ) : (
                     recentHolidayRequests.map((request) => {
@@ -361,7 +363,7 @@ export default function Dashboard() {
                         <div key={request.id} className="p-4 bg-slate-50 rounded-xl border border-slate-200 hover:shadow-md transition-all">
                           <div className="flex items-center justify-between mb-2">
                             <p className="font-semibold text-slate-900">
-                              {driver?.name || 'Unknown Driver'}
+                              {driver?.name || t('dashboard.unknownDriver')}
                             </p>
                             <Badge 
                               variant={
@@ -400,9 +402,9 @@ export default function Dashboard() {
                     <BarChart3 className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg text-slate-900">Fleet Performance</CardTitle>
+                    <CardTitle className="text-lg text-slate-900">{t('dashboard.fleetPerformance')}</CardTitle>
                     <CardDescription className="text-slate-600">
-                      Real-time performance indicators
+                      {t('dashboard.realTimePerformanceIndicators')}
                     </CardDescription>
                   </div>
                 </div>
@@ -410,7 +412,7 @@ export default function Dashboard() {
               <CardContent className="space-y-6">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-700">Driver Utilization</span>
+                    <span className="text-sm font-medium text-slate-700">{t('dashboard.driverUtilization')}</span>
                     <span className="text-sm font-bold text-slate-900">
                       {stats.totalDrivers > 0 ? Math.round((stats.activeDrivers / stats.totalDrivers) * 100) : 0}%
                     </span>
@@ -425,7 +427,7 @@ export default function Dashboard() {
                 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-700">Safety Score</span>
+                    <span className="text-sm font-medium text-slate-700">{t('dashboard.safetyScore')}</span>
                     <span className="text-sm font-bold text-slate-900">
                       {stats.totalWarnings > 0 ? Math.max(0, Math.round(((stats.totalWarnings - stats.highSeverityWarnings) / stats.totalWarnings) * 100)) : 100}%
                     </span>
@@ -440,7 +442,7 @@ export default function Dashboard() {
 
                 <div className="pt-4 border-t border-slate-200">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-600">Fleet Health</span>
+                    <span className="text-slate-600">{t('dashboard.fleetHealth')}</span>
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                       <span className="font-medium text-green-700">Excellent</span>
@@ -457,9 +459,9 @@ export default function Dashboard() {
                     <Zap className="h-5 w-5 text-purple-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg text-slate-900">Quick Actions</CardTitle>
+                    <CardTitle className="text-lg text-slate-900">{t('dashboard.quickActions')}</CardTitle>
                     <CardDescription className="text-slate-600">
-                      Common management tasks
+                      {t('dashboard.commonManagementTasks')}
                     </CardDescription>
                   </div>
                 </div>
@@ -474,7 +476,7 @@ export default function Dashboard() {
                     <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                       <Users className="h-4 w-4 text-blue-600" />
                     </div>
-                    <span className="text-sm font-medium">Add Driver</span>
+                    <span className="text-sm font-medium">{t('dashboard.addDriver')}</span>
                   </Button>
                   
                   <Button
@@ -485,7 +487,7 @@ export default function Dashboard() {
                     <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                       <AlertTriangle className="h-4 w-4 text-orange-600" />
                     </div>
-                    <span className="text-sm font-medium">View Warnings</span>
+                    <span className="text-sm font-medium">{t('dashboard.viewWarnings')}</span>
                   </Button>
                   
                   <Button
@@ -496,7 +498,7 @@ export default function Dashboard() {
                     <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                       <Calendar className="h-4 w-4 text-green-600" />
                     </div>
-                    <span className="text-sm font-medium">View Holidays</span>
+                    <span className="text-sm font-medium">{t('dashboard.viewHolidays')}</span>
                   </Button>
                   
                   <Button
@@ -507,7 +509,7 @@ export default function Dashboard() {
                     <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
                       <MapPin className="h-4 w-4 text-purple-600" />
                     </div>
-                    <span className="text-sm font-medium">Manage Drivers</span>
+                    <span className="text-sm font-medium">{t('dashboard.manageDrivers')}</span>
                   </Button>
                 </div>
               </CardContent>
@@ -519,7 +521,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-center gap-2 text-sm text-indigo-700">
               <Shield className="h-4 w-4" />
               <span>
-                All data is encrypted and securely managed. Dashboard updates automatically every 30 seconds.
+                {t('dashboard.securityNotice')}
               </span>
             </div>
           </div>

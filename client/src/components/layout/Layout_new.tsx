@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import NotificationBell from '@/components/notifications/NotificationBell'
@@ -26,34 +25,34 @@ import {
 } from 'lucide-react'
 
 const mainNavigation = [
-  { name: 'navigation.dashboard', href: '/dashboard', icon: LayoutDashboard, section: 'main' },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, section: 'main' },
 ]
 
 const coreManagementNavigation = [
-  { name: 'navigation.drivers', href: '/drivers', icon: Users, section: 'core' },
-  { name: 'navigation.warnings', href: '/warnings', icon: AlertTriangle, section: 'core' },
-  { name: 'navigation.holidays', href: '/holiday-requests', icon: Calendar, section: 'core' },
+  { name: 'Drivers', href: '/drivers', icon: Users, section: 'core' },
+  { name: 'Warnings', href: '/warnings', icon: AlertTriangle, section: 'core' },
+  { name: 'Holidays', href: '/holiday-requests', icon: Calendar, section: 'core' },
 ]
 
 const schedulingNavigation = [
-  { name: 'navigation.schedulePlanner', href: '/schedule-planner', icon: Clock, section: 'scheduling' },
+  { name: 'Schedule Planner', href: '/schedule-planner', icon: Clock, section: 'scheduling' },
 ]
 
 const scheduleSubmenu = [
-  { name: 'navigation.schedulePlanner', href: '/schedule-planner', icon: Clock },
-  { name: 'navigation.scheduleSettings', href: '/schedule-settings', icon: Settings },
+  { name: 'Schedule Planner', href: '/schedule-planner', icon: Clock },
+  { name: 'Schedule Settings', href: '/schedule-settings', icon: Settings },
 ]
 
 const warningSubmenu = [
-  { name: 'navigation.allWarnings', href: '/warnings', icon: AlertTriangle },
-  { name: 'navigation.categories', href: '/warning-categories', icon: Tags },
-  { name: 'navigation.templates', href: '/warning-templates', icon: FileText },
+  { name: 'All Warnings', href: '/warnings', icon: AlertTriangle },
+  { name: 'Categories', href: '/warning-categories', icon: Tags },
+  { name: 'Templates', href: '/warning-templates', icon: FileText },
 ]
 
 const systemNavigation = [
-  { name: 'navigation.timesheetMobile', href: '/timesheet-integration', icon: Timer, section: 'system' },
-  { name: 'navigation.projectSettings', href: '/project-settings', icon: Settings, section: 'system' },
-  { name: 'navigation.auditLogs', href: '/audit-logs', icon: Shield, section: 'system' },
+  { name: 'TimeSheet Mobile', href: '/timesheet-integration', icon: Timer, section: 'system' },
+  { name: 'Project Settings', href: '/project-settings', icon: Settings, section: 'system' },
+  { name: 'Audit Logs', href: '/audit-logs', icon: Shield, section: 'system' },
 ]
 
 interface LayoutProps {
@@ -65,7 +64,6 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate()
   const { isAuthenticated, user, logout } = useAuth()
   const { toast } = useToast()
-  const { t } = useTranslation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
 
@@ -81,14 +79,14 @@ export default function Layout({ children }: LayoutProps) {
     try {
       await logout()
       toast({
-        title: t('auth.logoutSuccess'),
-        description: t('auth.logoutSuccess'),
+        title: "Logged out successfully",
+        description: "You have been securely logged out.",
       })
       navigate('/')
     } catch (error) {
       toast({
-        title: t('common.error'),
-        description: t('messages.actionFailed'),
+        title: "Error",
+        description: "Failed to logout. Please try again.",
         variant: "destructive",
       })
     }
@@ -156,7 +154,7 @@ export default function Layout({ children }: LayoutProps) {
         <nav className={cn("px-4", isMobile ? "mt-8" : "mt-6")}>
           {/* Main Section */}
           <div className="mb-4">
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">{t('navigation.main')}</h2>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Main</h2>
           </div>
           <ul className="space-y-1">
             {mainNavigation.map((item) => {
@@ -175,7 +173,7 @@ export default function Layout({ children }: LayoutProps) {
                     onClick={() => setSidebarOpen(false)}
                   >
                     <item.icon className={cn(isMobile ? "h-6 w-6" : "h-5 w-5")} />
-                    <span className={cn(isMobile && "text-base")}>{t(item.name)}</span>
+                    <span className={cn(isMobile && "text-base")}>{item.name}</span>
                   </Link>
                 </li>
               )
@@ -184,12 +182,12 @@ export default function Layout({ children }: LayoutProps) {
 
           {/* Core Management Section */}
           <div className={cn("mb-4", isMobile ? "mt-8" : "mt-6")}>
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">{t('navigation.management')}</h2>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Management</h2>
           </div>
           <ul className="space-y-1">
             {coreManagementNavigation.map((item) => {
               const isActive = location.pathname === item.href
-              const isWarningsSection = item.name === 'navigation.warnings'
+              const isWarningsSection = item.name === 'Warnings'
               const isWarningsActive = location.pathname.startsWith('/warning')
               
               if (isWarningsSection) {
@@ -208,7 +206,7 @@ export default function Layout({ children }: LayoutProps) {
                       >
                         <div className="flex items-center space-x-3">
                           <item.icon className={cn(isMobile ? "h-6 w-6" : "h-5 w-5")} />
-                          <span className={cn(isMobile && "text-base")}>{t(item.name)}</span>
+                          <span className={cn(isMobile && "text-base")}>{item.name}</span>
                         </div>
                         <svg 
                           className={cn("transition-transform", 
@@ -240,7 +238,7 @@ export default function Layout({ children }: LayoutProps) {
                                   onClick={() => setSidebarOpen(false)}
                                 >
                                   <subItem.icon className={cn(isMobile ? "h-5 w-5" : "h-4 w-4")} />
-                                  <span className={cn(isMobile && "text-sm")}>{t(subItem.name)}</span>
+                                  <span className={cn(isMobile && "text-sm")}>{subItem.name}</span>
                                 </Link>
                               </li>
                             )
@@ -266,7 +264,7 @@ export default function Layout({ children }: LayoutProps) {
                     onClick={() => setSidebarOpen(false)}
                   >
                     <item.icon className={cn(isMobile ? "h-6 w-6" : "h-5 w-5")} />
-                    <span className={cn(isMobile && "text-base")}>{t(item.name)}</span>
+                    <span className={cn(isMobile && "text-base")}>{item.name}</span>
                   </Link>
                 </li>
               )
@@ -275,12 +273,12 @@ export default function Layout({ children }: LayoutProps) {
 
           {/* Scheduling Section */}
           <div className={cn("mb-4", isMobile ? "mt-8" : "mt-6")}>
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">{t('navigation.scheduling')}</h2>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">Scheduling</h2>
           </div>
           <ul className="space-y-1">
             {schedulingNavigation.map((item) => {
               const isActive = location.pathname === item.href
-              const isScheduleSection = item.name === 'navigation.schedulePlanner'
+              const isScheduleSection = item.name === 'Schedule Planner'
               const isScheduleActive = location.pathname.startsWith('/schedule')
               
               if (isScheduleSection) {
@@ -299,7 +297,7 @@ export default function Layout({ children }: LayoutProps) {
                       >
                         <div className="flex items-center space-x-3">
                           <item.icon className={cn(isMobile ? "h-6 w-6" : "h-5 w-5")} />
-                          <span className={cn(isMobile && "text-base")}>{t(item.name)}</span>
+                          <span className={cn(isMobile && "text-base")}>{item.name}</span>
                         </div>
                         <svg 
                           className={cn("transition-transform", 
@@ -331,7 +329,7 @@ export default function Layout({ children }: LayoutProps) {
                                   onClick={() => setSidebarOpen(false)}
                                 >
                                   <subItem.icon className={cn(isMobile ? "h-5 w-5" : "h-4 w-4")} />
-                                  <span className={cn(isMobile && "text-sm")}>{t(subItem.name)}</span>
+                                  <span className={cn(isMobile && "text-sm")}>{subItem.name}</span>
                                 </Link>
                               </li>
                             )
@@ -357,7 +355,7 @@ export default function Layout({ children }: LayoutProps) {
                     onClick={() => setSidebarOpen(false)}
                   >
                     <item.icon className={cn(isMobile ? "h-6 w-6" : "h-5 w-5")} />
-                    <span className={cn(isMobile && "text-base")}>{t(item.name)}</span>
+                    <span className={cn(isMobile && "text-base")}>{item.name}</span>
                   </Link>
                 </li>
               )
@@ -366,7 +364,7 @@ export default function Layout({ children }: LayoutProps) {
           
           {/* System Navigation */}
           <div className={cn("mb-4", isMobile ? "mt-8" : "mt-6")}>
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">{t('navigation.system')}</h2>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-4">System</h2>
           </div>
           <ul className="space-y-1">
             {systemNavigation.map((item) => {
@@ -385,7 +383,7 @@ export default function Layout({ children }: LayoutProps) {
                     onClick={() => setSidebarOpen(false)}
                   >
                     <item.icon className={cn(isMobile ? "h-6 w-6" : "h-5 w-5")} />
-                    <span className={cn(isMobile && "text-base")}>{t(item.name)}</span>
+                    <span className={cn(isMobile && "text-base")}>{item.name}</span>
                   </Link>
                 </li>
               )
@@ -461,7 +459,7 @@ export default function Layout({ children }: LayoutProps) {
                   >
                     <Link to="/profile">
                       <User className={cn("text-indigo-600", isMobile ? "mr-3 h-5 w-5" : "mr-2 h-4 w-4")} />
-                      <span className={cn(isMobile && "text-base")}>{t('navigation.profile')}</span>
+                      <span className={cn(isMobile && "text-base")}>Profile</span>
                     </Link>
                   </Button>
                   <Button
@@ -474,7 +472,7 @@ export default function Layout({ children }: LayoutProps) {
                     )}
                   >
                     <LogOut className={cn("text-red-600", isMobile ? "mr-3 h-5 w-5" : "mr-2 h-4 w-4")} />
-                    <span className={cn(isMobile && "text-base")}>{t('auth.logout')}</span>
+                    <span className={cn(isMobile && "text-base")}>Logout</span>
                   </Button>
                 </div>
               ) : (

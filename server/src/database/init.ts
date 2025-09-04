@@ -87,6 +87,37 @@ export async function initializeDatabase() {
       )
     `)
 
+    // Create driver schedules table
+    await dbRun(`
+      CREATE TABLE IF NOT EXISTS driver_schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        driver_id INTEGER NOT NULL,
+        schedule_date DATE NOT NULL,
+        status TEXT NOT NULL DEFAULT 'available',
+        working_tour_id INTEGER,
+        van_assigned TEXT,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (driver_id) REFERENCES drivers(id),
+        FOREIGN KEY (working_tour_id) REFERENCES working_tours(id),
+        UNIQUE(driver_id, schedule_date)
+      )
+    `)
+
+    // Create working tours table
+    await dbRun(`
+      CREATE TABLE IF NOT EXISTS working_tours (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT UNIQUE NOT NULL,
+        description TEXT,
+        color TEXT NOT NULL DEFAULT '#3B82F6',
+        is_active BOOLEAN DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+
     // Create warning_categories table
     await dbRun(`
       CREATE TABLE IF NOT EXISTS warning_categories (
@@ -210,6 +241,18 @@ export async function initializeDatabase() {
         method TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `)
+
+    // Create timesheet_tokens table for TimeSheet Mobile API integration
+    await dbRun(`
+      CREATE TABLE IF NOT EXISTS timesheet_tokens (
+        id INTEGER PRIMARY KEY,
+        access_token TEXT,
+        refresh_token TEXT,
+        expires_at TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `)
 

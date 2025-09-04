@@ -5,8 +5,10 @@ import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { NotificationProvider } from '@/contexts/NotificationContext'
 import { AuthProvider } from '@/contexts/AuthContext'
+import { LanguageProvider } from '@/contexts/LanguageContext'
 import App from './App.tsx'
 import './index.css'
+import './i18n' // Initialize i18n
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,7 +30,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       >
         <NotificationProvider>
           <AuthProvider>
-            <App />
+            <LanguageProvider>
+              <App />
+            </LanguageProvider>
           </AuthProvider>
           <Toaster />
         </NotificationProvider>

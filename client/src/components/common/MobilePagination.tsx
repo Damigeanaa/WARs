@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { useMobile } from '@/hooks/useMobile'
 import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 interface MobilePaginationProps {
   currentPage: number
@@ -22,6 +23,7 @@ export default function MobilePagination({
   onItemsPerPageChange
 }: MobilePaginationProps) {
   const { isMobile } = useMobile()
+  const { t } = useTranslation()
 
   // Mobile items per page options (smaller numbers for mobile)
   const mobileItemsPerPageOptions = [5, 10, 15, 20]
@@ -98,19 +100,19 @@ export default function MobilePagination({
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-sm text-slate-600">
         <div className="flex items-center gap-2">
           <span>
-            Showing {startItem} to {endItem} of {totalItems} items
+            {t('pagination.showingItems', { start: startItem, end: endItem, total: totalItems })}
           </span>
         </div>
         
         {showItemsPerPage && onItemsPerPageChange && (
           <div className="flex items-center gap-2">
-            <span className="whitespace-nowrap">Items per page:</span>
+            <span className="whitespace-nowrap">{t('pagination.itemsPerPage')}:</span>
             <select
               value={itemsPerPage}
               onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
               className="border border-slate-300 rounded-md px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              title="Items per page"
-              aria-label="Items per page"
+              title={t('pagination.itemsPerPage')}
+              aria-label={t('pagination.itemsPerPage')}
             >
               {itemsPerPageOptions.map((option) => (
                 <option key={option} value={option}>
@@ -136,15 +138,15 @@ export default function MobilePagination({
                 className="flex items-center gap-2"
               >
                 <ChevronLeft className="h-4 w-4" />
-                Previous
+                {t('pagination.previous')}
               </Button>
               
               <div className="flex items-center gap-2 text-sm font-medium">
-                <span className="text-slate-500">Page</span>
+                <span className="text-slate-500">{t('pagination.page')}</span>
                 <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-md">
                   {currentPage}
                 </span>
-                <span className="text-slate-500">of {totalPages}</span>
+                <span className="text-slate-500">{t('pagination.of')} {totalPages}</span>
               </div>
               
               <Button
@@ -154,7 +156,7 @@ export default function MobilePagination({
                 disabled={currentPage === totalPages}
                 className="flex items-center gap-2"
               >
-                Next
+                {t('pagination.next')}
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -169,7 +171,7 @@ export default function MobilePagination({
                 className="flex items-center gap-1"
               >
                 <ChevronLeft className="h-4 w-4" />
-                Previous
+                {t('pagination.previous')}
               </Button>
               
               <div className="flex items-center gap-1">
@@ -200,7 +202,7 @@ export default function MobilePagination({
                 disabled={currentPage === totalPages}
                 className="flex items-center gap-1"
               >
-                Next
+                {t('pagination.next')}
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

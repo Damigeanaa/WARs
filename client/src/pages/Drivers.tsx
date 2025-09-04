@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -48,6 +49,7 @@ interface Driver {
 
 export default function Drivers() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { searchTerm, debouncedSearchTerm, setSearchTerm } = useSearch()
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [employmentFilter, setEmploymentFilter] = useState<string>('all')
@@ -105,7 +107,7 @@ export default function Drivers() {
   }
 
   const handleDeleteDriver = async (driver: Driver) => {
-    if (!window.confirm(`Are you sure you want to delete driver "${driver.name}"? This action cannot be undone.`)) {
+    if (!window.confirm(t('drivers.confirmDeleteDriver', { name: driver.name }))) {
       return
     }
 
@@ -121,7 +123,7 @@ export default function Drivers() {
       queryClient.invalidateQueries({ queryKey: ['drivers'] })
     } catch (error) {
       console.error('Error deleting driver:', error)
-      alert('Failed to delete driver. Please try again.')
+      alert(t('drivers.deleteError'))
     }
   }
 
@@ -159,8 +161,8 @@ export default function Drivers() {
         <div className="container mx-auto px-6 py-20">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-            <p className="text-lg font-medium text-slate-700">Loading drivers...</p>
-            <p className="text-sm text-slate-500">Please wait while we fetch your fleet data</p>
+            <p className="text-lg font-medium text-slate-700">{t('drivers.loadingDrivers')}</p>
+            <p className="text-sm text-slate-500">{t('drivers.pleaseWait')}</p>
           </div>
         </div>
       </div>
@@ -181,9 +183,9 @@ export default function Drivers() {
             </div>
             <div>
               <span className="text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-                Drivers
+                {t('drivers.title')}
               </span>
-              <div className="text-xs text-slate-500 font-medium">Fleet Management ({filteredDrivers.length} drivers)</div>
+              <div className="text-xs text-slate-500 font-medium">{t('drivers.fleetManagement', { count: filteredDrivers.length })}</div>
             </div>
           </div>
           <Button 
@@ -192,7 +194,7 @@ export default function Drivers() {
             className="border-2 border-slate-300 hover:border-indigo-300 hover:bg-indigo-50"
           >
             <Home className="mr-2 h-4 w-4" />
-            Home
+            {t('navigation.home')}
           </Button>
         </div>
       </nav>
@@ -204,15 +206,15 @@ export default function Drivers() {
           <div className="text-center mb-12">
             <div className="inline-flex items-center space-x-2 bg-indigo-50 border border-indigo-200 rounded-full px-4 py-2 mb-6">
               <Users className="h-4 w-4 text-indigo-600" />
-              <span className="text-sm font-medium text-indigo-700">Driver Management</span>
-              <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Active</Badge>
+              <span className="text-sm font-medium text-indigo-700">{t('drivers.driverManagement')}</span>
+              <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">{t('common.active')}</Badge>
             </div>
             
             <h1 className="text-4xl font-bold text-slate-900 mb-4">
-              Fleet Management
+              {t('drivers.fleetManagementTitle')}
             </h1>
             <p className="text-lg text-slate-600 max-w-2xl mx-auto">
-              Manage your driver fleet, track employment details, and monitor vacation allowances.
+              {t('drivers.fleetManagementDescription')}
             </p>
           </div>
 
@@ -232,7 +234,7 @@ export default function Drivers() {
                 className="border-slate-300 hover:border-indigo-300 hover:bg-indigo-50 w-full sm:w-auto"
               >
                 <Upload className="mr-2 h-4 w-4" />
-                Import Drivers
+                {t('drivers.importDrivers')}
               </Button>
             </div>
             <Button 
@@ -240,7 +242,7 @@ export default function Drivers() {
               className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 w-full sm:w-auto"
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add Driver
+              {t('drivers.addDriver')}
             </Button>
           </div>
 
@@ -248,29 +250,29 @@ export default function Drivers() {
           <SearchAndFilter
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
-            placeholder="Search drivers by name, email, license, phone, or address..."
+            placeholder={t('drivers.searchPlaceholder')}
             showFilters={showFilters}
             onToggleFilters={setShowFilters}
             filters={{
               status: {
                 value: statusFilter,
                 onChange: setStatusFilter,
-                label: "Status",
+                label: t('common.status'),
                 options: [
-                  { value: 'all', label: 'All Status' },
-                  { value: 'Active', label: 'Active' },
-                  { value: 'Inactive', label: 'Inactive' },
-                  { value: 'On Holiday', label: 'On Holiday' }
+                  { value: 'all', label: t('drivers.allStatus') },
+                  { value: 'Active', label: t('drivers.active') },
+                  { value: 'Inactive', label: t('drivers.inactive') },
+                  { value: 'On Holiday', label: t('drivers.onHoliday') }
                 ]
               },
               employment: {
                 value: employmentFilter,
                 onChange: setEmploymentFilter,
-                label: "Employment",
+                label: t('drivers.employmentType'),
                 options: [
-                  { value: 'all', label: 'All Types' },
-                  { value: 'Fulltime', label: 'Full-time' },
-                  { value: 'Minijob', label: 'Mini-job' }
+                  { value: 'all', label: t('drivers.allTypes') },
+                  { value: 'Fulltime', label: t('drivers.fulltime') },
+                  { value: 'Minijob', label: t('drivers.minijob') }
                 ]
               }
             }}
@@ -289,9 +291,13 @@ export default function Drivers() {
                     <UserCheck className="h-5 w-5 text-blue-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-xl text-slate-900">All Drivers</CardTitle>
+                    <CardTitle className="text-xl text-slate-900">{t('drivers.allDrivers')}</CardTitle>
                     <p className="text-slate-600 text-sm mt-1">
-                      Showing {paginatedDrivers.length} of {filteredDrivers.length} driver{filteredDrivers.length !== 1 ? 's' : ''} in your fleet
+                      {t('drivers.showingDrivers', { 
+                        showing: paginatedDrivers.length, 
+                        total: filteredDrivers.length,
+                        count: filteredDrivers.length 
+                      })}
                     </p>
                   </div>
                 </div>
@@ -429,13 +435,13 @@ export default function Drivers() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-slate-200">
-                      <th className="text-left py-4 px-4 font-semibold text-slate-700">Driver ID</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-700">Driver Details</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-700">Employment</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-700">Vacation Days</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-700">Status</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-700">Join Date</th>
-                      <th className="text-left py-4 px-4 font-semibold text-slate-700">Actions</th>
+                      <th className="text-left py-4 px-4 font-semibold text-slate-700">{t('drivers.driverID')}</th>
+                      <th className="text-left py-4 px-4 font-semibold text-slate-700">{t('drivers.driverDetails')}</th>
+                      <th className="text-left py-4 px-4 font-semibold text-slate-700">{t('drivers.employment')}</th>
+                      <th className="text-left py-4 px-4 font-semibold text-slate-700">{t('drivers.vacationDays')}</th>
+                      <th className="text-left py-4 px-4 font-semibold text-slate-700">{t('common.status')}</th>
+                      <th className="text-left py-4 px-4 font-semibold text-slate-700">{t('drivers.joinDate')}</th>
+                      <th className="text-left py-4 px-4 font-semibold text-slate-700">{t('common.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -480,7 +486,7 @@ export default function Drivers() {
                                 : 'bg-orange-100 text-orange-800 border-orange-200'
                             }`}
                           >
-                            {driver.employment_type === 'Fulltime' ? 'Full-time' : 'Mini-job'}
+                            {driver.employment_type === 'Fulltime' ? t('drivers.fulltime') : t('drivers.minijob')}
                           </Badge>
                         </td>
                         <td className="py-4 px-4">
@@ -491,7 +497,7 @@ export default function Drivers() {
                                 {(driver.annual_vacation_days || 25) - (driver.used_vacation_days || 0)} / {driver.annual_vacation_days || 25}
                               </span>
                             </div>
-                            <p className="text-xs text-slate-500">days remaining</p>
+                            <p className="text-xs text-slate-500">{t('drivers.daysRemaining')}</p>
                           </div>
                         </td>
                         <td className="py-4 px-4">
@@ -532,7 +538,7 @@ export default function Drivers() {
                               className="border-slate-300 hover:border-indigo-300 hover:bg-indigo-50"
                             >
                               <Eye className="mr-1 h-3 w-3" />
-                              View
+                              {t('common.view')}
                             </Button>
                             <Button 
                               variant="outline" 
@@ -541,7 +547,7 @@ export default function Drivers() {
                               className="border-slate-300 hover:border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700"
                             >
                               <Trash2 className="mr-1 h-3 w-3" />
-                              Delete
+                              {t('common.delete')}
                             </Button>
                           </div>
                         </td>
@@ -556,8 +562,8 @@ export default function Drivers() {
                   <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Users className="h-8 w-8 text-slate-400" />
                   </div>
-                  <p className="text-lg font-medium text-slate-700 mb-2">No drivers found</p>
-                  <p className="text-slate-500">Try adjusting your search criteria or add a new driver.</p>
+                  <p className="text-lg font-medium text-slate-700 mb-2">{t('drivers.noDriversFound')}</p>
+                  <p className="text-slate-500">{t('drivers.adjustSearchCriteria')}</p>
                 </div>
               )}
             </CardContent>
@@ -585,7 +591,7 @@ export default function Drivers() {
             <div className="flex items-center justify-center gap-2 text-sm text-indigo-700">
               <Shield className="h-4 w-4" />
               <span>
-                All driver information is securely encrypted and complies with data protection regulations.
+                {t('drivers.securityNotice')}
               </span>
             </div>
           </div>
