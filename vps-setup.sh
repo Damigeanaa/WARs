@@ -387,6 +387,14 @@ fi
 
 print_success "Environment configured with secure JWT secret"
 
+# Clean up backup files that might cause build issues
+print_status "Cleaning up backup and temporary files..."
+find . -name "*_backup.*" -type f -delete 2>/dev/null || true
+find . -name "*.backup" -type f -delete 2>/dev/null || true
+find . -name "*.bak" -type f -delete 2>/dev/null || true
+find . -name "*~" -type f -delete 2>/dev/null || true
+print_success "Cleanup completed"
+
 # Build application
 print_status "Building application..."
 if ! npm run build; then
