@@ -355,4 +355,56 @@ router.delete('/:id/profile-picture', async (req, res) => {
   }
 })
 
+// POST /api/drivers/bulk-update-vacation-days - Update all drivers' vacation days based on employment type and current settings
+router.post('/bulk-update-vacation-days', async (req, res) => {
+  try {
+    // Get current project settings
+    const settingsQuery = `
+      SELECT setting_key, setting_value 
+      FROM project_settings 
+      WHERE setting_key IN ('defaultVacationDaysMinijob', 'defaultVacationDaysFulltime')
+    `
+    const settingsRows = await dbAll(settingsQuery, []) as { setting_key: string; setting_value: string }[]
+    
+    const settings: { [key: string]: number } = {}
+    settingsRows.forEach(row => {
+      settings[row.setting_key] = JSON.parse(row.setting_value)
+    })
+    
+    // Default values if settings don't exist
+    const minijobDays = settings.defaultVacationDaysMinijob || 20
+    const fulltimeDays = settings.defaultVacationDaysFulltime || 30
+    
+    // Update Minijob drivers
+    const minijobResult = await dbRun(
+      'UPDATE drivers SET annual_vacation_days = ?, updated_at = CURRENT_TIMESTAMP WHERE employment_type = ?',
+      [minijobDays, 'Minijob']
+    )
+    
+    // Update Fulltime drivers
+    const fulltimeResult = await dbRun(
+      'UPDATE drivers SET annual_vacation_days = ?, updated_at = CURRENT_TIMESTAMP WHERE employment_type = ?',
+      [fulltimeDays, 'Fulltime']
+    )
+    
+    const totalUpdated = (minijobResult.changes || 0) + (fulltimeResult.changes || 0)
+    
+    res.json({ 
+      message: `Successfully updated vacation days for ${totalUpdated} drivers`,
+      updated: {
+        minijob: minijobResult.changes || 0,
+        fulltime: fulltimeResult.changes || 0,
+        total: totalUpdated
+      },
+      settings: {
+        minijobDays,
+        fulltimeDays
+      }
+    })
+  } catch (error) {
+    console.error('Error bulk updating vacation days:', error)
+    res.status(500).json({ error: 'Failed to update vacation days' })
+  }
+})
+
 export { router as driversRouter }

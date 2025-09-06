@@ -1,30 +1,9 @@
 #!/bin/bash
 
-# 🚀 Driver Management System - Quick VPS Setup Script
-# This script automates the initial setup of the application# Configure firewall
-print_status "Configuring firewall..."
-sudo apt install -y ufw
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
-sudo ufw allow ssh
-sudo ufw allow 'Nginx Full'
-sudo ufw --force enable
-
-# Handle clean install option
-if [ "$CLEAN_INSTALL" = true ]; then
-    print_warning "Clean install requested - removing existing installation..."
-    if [ -d "/var/www/driver-management" ]; then
-        print_status "Stopping existing application..."
-        pm2 delete driver-management-api 2>/dev/null || true
-        print_status "Removing existing files..."
-        sudo rm -rf /var/www/driver-management
-        print_success "Existing installation cleaned"
-    else
-        print_status "No existing installation found"
-    fi
-fi
-
-# Setting up repository...x VPS
+# 🚀 Driver Management System - Fully Automated VPS Setup Script
+# This script automates the complete setup of the application on a fresh VPS
+# Usage: ./vps-setup.sh [repository_url] [domain_name]
+# Example: ./vps-setup.sh https://github.com/Damigeanaa/WARs.git driverconnected.de
 
 set -e
 
@@ -69,58 +48,124 @@ if [[ $EUID -eq 0 ]]; then
    fi
 fi
 
-# Configuration - Update these with your details
-REPO_URL="https://github.com/Damigeanaa/WARs.git"
-DOMAIN_NAME="driverconnected.de"
+# Configuration - Default values (will be overridden by command line arguments)
+REPO_URL=""
+DOMAIN_NAME=""
 
-# Check for command line flags
+# Check for command line flags and arguments
 CLEAN_INSTALL=false
 ALLOW_ROOT=false
 
+# Parse arguments
+POSITIONAL_ARGS=()
 for arg in "$@"; do
     case $arg in
         --clean)
             CLEAN_INSTALL=true
+            shift
             ;;
         --allow-root)
             ALLOW_ROOT=true
+            shift
             ;;
         --help)
-            echo "Usage: $0 [options] [repository_url] [domain_name]"
+            echo "Usage: $0 [options] <repository_url> [domain_name]"
+            echo ""
+            echo "Arguments:"
+            echo "  repository_url    GitHub repository URL (required)"
+            echo "  domain_name       Domain name for SSL setup (optional)"
             echo ""
             echo "Options:"
-            echo "  --clean       Remove existing installation and start fresh"
-            echo "  --allow-root  Allow running as root (not recommended)"
-            echo "  --help        Show this help message"
+            echo "  --clean           Remove existing installation and start fresh"
+            echo "  --allow-root      Allow running as root (not recommended)"
+            echo "  --help            Show this help message"
             echo ""
             echo "Examples:"
-            echo "  $0                                                    # Use default settings"
-            echo "  $0 https://github.com/user/repo.git mydomain.com     # Custom repo and domain"
-            echo "  $0 --clean                                           # Fresh installation"
+            echo "  $0 https://github.com/user/repo.git"
+            echo "  $0 https://github.com/user/repo.git mydomain.com"
+            echo "  $0 --clean https://github.com/user/repo.git mydomain.com"
             exit 0
+            ;;
+        -*)
+            print_error "Unknown option: $arg"
+            exit 1
+            ;;
+        *)
+            POSITIONAL_ARGS+=("$arg")
             ;;
     esac
 done
 
-# Optional: Allow override via command line arguments (skip flags)
-ARGS=()
-for arg in "$@"; do
-    if [[ ! "$arg" =~ ^-- ]]; then
-        ARGS+=("$arg")
-    fi
-done
-
-if [ "${ARGS[0]}" != "" ]; then
-    REPO_URL="${ARGS[0]}"
+# Set positional arguments
+if [ ${#POSITIONAL_ARGS[@]} -eq 0 ]; then
+    print_error "Repository URL is required!"
+    echo ""
+    echo "Usage: $0 <repository_url> [domain_name]"
+    echo "Example: $0 https://github.com/Damigeanaa/WARs.git driverconnected.de"
+    echo ""
+    echo "Run '$0 --help' for more information."
+    exit 1
 fi
-if [ "${ARGS[1]}" != "" ]; then
-    DOMAIN_NAME="${ARGS[1]}"
+
+REPO_URL="${POSITIONAL_ARGS[0]}"
+DOMAIN_NAME="${POSITIONAL_ARGS[1]:-}"
+
+# Validate repository URL
+if [[ ! "$REPO_URL" =~ ^https://github\.com/.+/.+\.git$ ]]; then
+    print_error "Invalid GitHub repository URL format!"
+    echo "Expected format: https://github.com/username/repository.git"
+    echo "Provided: $REPO_URL"
+    exit 1
 fi
 
 echo "🔗 Repository: $REPO_URL"
-echo "🌐 Domain: $DOMAIN_NAME"
+if [ -n "$DOMAIN_NAME" ]; then
+    echo "🌐 Domain: $DOMAIN_NAME (SSL will be configured)"
+else
+    echo "🌐 Domain: Not specified (HTTP only)"
+fi
+
+# Handle clean install option
+if [ "$CLEAN_INSTALL" = true ]; then
+    print_warning "Clean install requested - removing existing installation..."
+    if [ -d "/var/www/driver-management" ]; then
+        print_status "Stopping existing application..."
+        pm2 delete driver-management-api 2>/dev/null || true
+        print_status "Removing existing files..."
+        sudo rm -rf /var/www/driver-management
+        print_success "Existing installation cleaned"
+    else
+        print_status "No existing installation found"
+    fi
+fi
 
 print_status "Starting VPS setup..."
+
+# Pre-flight checks
+print_status "Running pre-flight checks..."
+
+# Check if we have sudo privileges
+if ! sudo -n true 2>/dev/null; then
+    print_error "This script requires sudo privileges. Please ensure your user can run sudo commands."
+    exit 1
+fi
+
+# Check if required ports are available
+if ss -tulpn | grep -q :80; then
+    print_warning "Port 80 is already in use. This might interfere with Nginx installation."
+fi
+
+if ss -tulpn | grep -q :3001; then
+    print_warning "Port 3001 is already in use. This might interfere with the API server."
+fi
+
+# Check available disk space (at least 2GB recommended)
+AVAILABLE_SPACE=$(df / | awk 'NR==2 {print $4}')
+if [ "$AVAILABLE_SPACE" -lt 2097152 ]; then  # 2GB in KB
+    print_warning "Less than 2GB of disk space available. Installation might fail."
+fi
+
+print_success "Pre-flight checks completed"
 
 # Update system
 print_status "Updating system packages..."
@@ -128,7 +173,7 @@ sudo apt update && sudo apt upgrade -y
 
 # Install essential packages
 print_status "Installing essential packages..."
-sudo apt install -y curl wget git unzip software-properties-common build-essential python3 python3-pip
+sudo apt install -y curl wget git unzip software-properties-common build-essential python3 python3-pip openssl
 
 # Install Node.js 22.x
 print_status "Installing Node.js 22.x..."
@@ -281,27 +326,76 @@ fi
 
 # Create environment file
 print_status "Creating environment configuration..."
-cp .env.example .env
+
+# Check if .env.example exists in root or server directory
+if [ -f ".env.example" ]; then
+    cp .env.example .env
+elif [ -f "server/.env.example" ]; then
+    cp server/.env.example server/.env
+    cp server/.env.example .env
+else
+    print_error ".env.example file not found!"
+    exit 1
+fi
+
+# Generate secure JWT secret automatically
+print_status "Generating secure JWT secret..."
+JWT_SECRET=$(openssl rand -base64 64 | tr -d "=+/" | cut -c1-64)
 
 # Update environment for production
 sed -i 's/NODE_ENV=development/NODE_ENV=production/' .env
 sed -i 's/HOST=localhost/HOST=0.0.0.0/' .env
 sed -i 's|DATABASE_PATH=./database.db|DATABASE_PATH=/var/www/driver-management/server/database.db|' .env
+sed -i "s|JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|" .env
 
-if [ ! -z "$DOMAIN_NAME" ]; then
-    sed -i "s|CORS_ORIGIN=http://localhost:5173|CORS_ORIGIN=https://$DOMAIN_NAME|" .env
+# Configure CORS and domain settings
+if [ -n "$DOMAIN_NAME" ]; then
+    sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=https://$DOMAIN_NAME|" .env
     echo "🔗 Application URL: https://$DOMAIN_NAME"
 else
-    sed -i "s|CORS_ORIGIN=http://localhost:5173|CORS_ORIGIN=*|" .env
-    SERVER_IP=$(curl -s ipinfo.io/ip)
+    sed -i "s|CORS_ORIGIN=.*|CORS_ORIGIN=*|" .env
+    SERVER_IP=$(curl -s ipinfo.io/ip 2>/dev/null || echo "your-server-ip")
     echo "🔗 Application URL: http://$SERVER_IP"
 fi
 
-print_warning "Please update the JWT_SECRET in .env file for production security!"
+# Also update server/.env if it exists separately
+if [ -f "server/.env.example" ] && [ ! -f "server/.env" ]; then
+    cp server/.env.example server/.env
+    sed -i 's/NODE_ENV=development/NODE_ENV=production/' server/.env
+    sed -i 's/HOST=localhost/HOST=0.0.0.0/' server/.env
+    sed -i 's|DATABASE_PATH=./database.db|DATABASE_PATH=/var/www/driver-management/server/database.db|' server/.env
+    sed -i "s|JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|" server/.env
+fi
+
+print_success "Environment configured with secure JWT secret"
 
 # Build application
 print_status "Building application..."
-npm run build
+if ! npm run build; then
+    print_error "Build failed! Trying alternative build process..."
+    
+    # Try building client separately
+    print_status "Building client..."
+    cd client
+    if ! npm run build; then
+        print_error "Client build failed!"
+        exit 1
+    fi
+    cd ..
+    
+    # Try building server separately
+    print_status "Building server..."
+    cd server
+    if ! npm run build; then
+        print_error "Server build failed!"
+        exit 1
+    fi
+    cd ..
+    
+    print_success "Alternative build process completed"
+else
+    print_success "Build completed successfully"
+fi
 
 # Create PM2 ecosystem file
 print_status "Creating PM2 configuration..."
@@ -404,10 +498,39 @@ sudo nginx -t
 sudo systemctl restart nginx
 
 # Install SSL certificate if domain provided
-if [ ! -z "$DOMAIN_NAME" ]; then
+if [ -n "$DOMAIN_NAME" ]; then
     print_status "Installing SSL certificate..."
     sudo apt install -y certbot python3-certbot-nginx
-    sudo certbot --nginx -d "$DOMAIN_NAME" -d "www.$DOMAIN_NAME" --non-interactive --agree-tos --register-unsafely-without-email
+    
+    # Wait for DNS propagation and domain verification
+    print_status "Waiting for domain to be accessible..."
+    sleep 10
+    
+    # Try to get SSL certificate with retry logic
+    for i in {1..3}; do
+        print_status "Attempting SSL certificate installation (attempt $i/3)..."
+        if sudo certbot --nginx -d "$DOMAIN_NAME" -d "www.$DOMAIN_NAME" --non-interactive --agree-tos --register-unsafely-without-email --redirect; then
+            print_success "SSL certificate installed successfully!"
+            
+            # Set up automatic renewal
+            print_status "Setting up automatic SSL renewal..."
+            echo "0 12 * * * /usr/bin/certbot renew --quiet" | sudo crontab -
+            break
+        else
+            print_warning "SSL certificate installation failed (attempt $i/3)"
+            if [ $i -eq 3 ]; then
+                print_error "Failed to install SSL certificate after 3 attempts"
+                print_warning "You can try manually later with: sudo certbot --nginx -d $DOMAIN_NAME"
+                print_warning "Make sure your domain DNS points to this server's IP address"
+            else
+                print_status "Waiting 30 seconds before retry..."
+                sleep 30
+            fi
+        fi
+    done
+else
+    print_status "No domain provided - SSL certificate will not be installed"
+    print_status "Application will be accessible via HTTP only"
 fi
 
 # Create utility scripts
@@ -599,18 +722,23 @@ echo "🔧 USEFUL COMMANDS"
 echo "=================================================="
 echo "📊 Check application: pm2 status"
 echo "📝 View logs: pm2 logs driver-management-api"
-echo "� System diagnosis: ./check-status.sh"
-echo "�🔄 Deploy updates: ./deploy.sh"
+echo "🔍 System diagnosis: ./check-status.sh"
+echo "🔄 Deploy updates: ./deploy.sh"
 echo "⚡ Quick update: ./update.sh"
 echo "💾 Backup database: ./backup-db.sh"
 echo ""
 echo "=================================================="
 echo "⚠️  NEXT STEPS"
 echo "=================================================="
-echo "1. Update JWT_SECRET in /var/www/driver-management/.env"
-echo "2. Login and change default admin password"
-echo "3. Configure domain DNS (if using domain)"
-echo "4. Set up automated backups (cron job)"
-echo "5. Monitor application logs"
+echo "1. Login and change default admin password"
+if [ -z "$DOMAIN_NAME" ]; then
+    echo "2. Configure domain DNS to point to this server's IP"
+    echo "3. Run SSL setup: sudo certbot --nginx -d yourdomain.com"
+else
+    echo "2. Verify domain DNS is properly configured"
+fi
+echo "3. Set up automated database backups (cron job)"
+echo "4. Monitor application logs regularly"
+echo "5. Keep system updated with: ./update.sh"
 echo ""
-print_success "Setup completed! Your Driver Management System is now running!"
+print_success "🎉 Setup completed! Your Driver Management System is now running!"

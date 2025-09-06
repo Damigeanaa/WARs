@@ -13,8 +13,14 @@ import importRouter from './routes/import.js'
 import warningCategoriesRouter from './routes/warningCategories.js'
 import warningTemplatesRouter from './routes/warningTemplates.js'
 import notificationsRouter from './routes/notifications.js'
+import performanceMetricsRouter from './routes/performanceMetrics.js'
 import { analyticsRouter } from './routes/analytics.js'
 import auditLogsRouter from './routes/auditLogs.js'
+import { schedulesRouter } from './routes/schedules.js'
+import { workingToursRouter } from './routes/workingTours.js'
+import { workPatternsRouter } from './routes/workPatterns.js'
+import timesheetRouter from './routes/timesheet.js'
+import settingsRouter from './routes/settings.js'
 import { initializeDatabase } from './database/init.js'
 import { auditMiddleware, extractUserForAudit } from './middleware/auditLogger.js'
 import { errorHandler } from './utils/validation.js'
@@ -29,7 +35,7 @@ const PORT = process.env.PORT || 3001
 app.use(helmet())
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.FRONTEND_URL || 'https://your-vercel-app.vercel.app'] 
+    ? [process.env.FRONTEND_URL || 'http://localhost:5173'] 
     : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
   credentials: true
 }))
@@ -50,11 +56,17 @@ app.use('/api/warnings', warningsRouter)
 app.use('/api/warning-categories', warningCategoriesRouter)
 app.use('/api/warning-templates', warningTemplatesRouter)
 app.use('/api/notifications', notificationsRouter)
+app.use('/api/performance-metrics', performanceMetricsRouter)
 app.use('/api/holidays', holidaysRouter)
 app.use('/api/holiday-requests', holidayRequestsRouter)
+app.use('/api/schedules', schedulesRouter)
+app.use('/api/working-tours', workingToursRouter)
+app.use('/api/work-patterns', workPatternsRouter)
 app.use('/api/analytics', analyticsRouter)
 app.use('/api/audit-logs', auditLogsRouter)
 app.use('/api/import', importRouter)
+app.use('/api/timesheet', timesheetRouter)
+app.use('/api/settings', settingsRouter)
 
 // Health check
 app.get('/api/health', (req, res) => {

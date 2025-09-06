@@ -1,3 +1,5 @@
+/* Import dynamic style helpers must be first (after optional @charset) */
+@import './components/ui/dynamic-styles.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -137,5 +139,60 @@
   
   .py-mobile {
     @apply py-4 sm:py-6;
+  }
+
+  /* Dynamic color utilities for schedule settings */
+  .dynamic-color {
+    background-color: var(--dynamic-color);
+  }
+
+  /* Enhanced Progress Bar Animation */
+  .progress-bar {
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 0%;
+  }
+
+  .progress-bar[data-pct] {
+    animation: progressFill 1.5s ease-out forwards;
+  }
+
+  @keyframes progressFill {
+    from {
+      width: 0%;
+    }
+    to {
+      width: var(--progress-width, 0%);
+    }
+  }
+
+  /* Enhanced Card Hover Effects */
+  .card-hover {
+    transition: all 0.3s ease;
+  }
+
+  .card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Gradient Text Effects */
+  .gradient-text {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Enhanced Badge Styles */
+  .status-badge-online {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    border: none;
+  }
+
+  .status-badge-offline {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    border: none;
   }
 }

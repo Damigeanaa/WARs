@@ -1,11 +1,19 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu'
 import { useNotifications } from '@/contexts/NotificationContext'
+import { useLanguage } from '@/contexts/LanguageContext'
 import { format as formatDate } from 'date-fns'
 import { API_ENDPOINTS } from '@/config/api'
 import { 
@@ -18,7 +26,8 @@ import {
   User,
   CalendarDays,
   Clock,
-  Shield
+  Shield,
+  Globe
 } from 'lucide-react'
 
 interface HolidayRequest {
@@ -29,11 +38,20 @@ interface HolidayRequest {
   reason: string
 }
 
+interface DriverVacationInfo {
+  name: string
+  annual_vacation_days: number
+  used_vacation_days: number
+  remaining_days: number
+}
+
 export default function HolidayRequestPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [validationError, setValidationError] = useState('')
   const { createNotification } = useNotifications()
+  const { currentLanguage, changeLanguage, availableLanguages } = useLanguage()
+  const { t } = useTranslation()
   const [formData, setFormData] = useState<HolidayRequest>({
     driverName: '',
     driverId: '',
@@ -41,6 +59,7 @@ export default function HolidayRequestPage() {
     endDate: '',
     reason: ''
   })
+  const [driverVacationInfo, setDriverVacationInfo] = useState<DriverVacationInfo | null>(null)
 
   const handleInputChange = (field: keyof HolidayRequest, value: string) => {
     setFormData(prev => ({
@@ -64,16 +83,49 @@ export default function HolidayRequestPage() {
     return 0
   }
 
+  const isRequestExceedingLimit = () => {
+    if (!driverVacationInfo) return false
+    const requestedDays = calculateDays()
+    return requestedDays > driverVacationInfo.remaining_days
+  }
+
+  const getVacationWarningType = () => {
+    if (!driverVacationInfo) return null
+    const requestedDays = calculateDays()
+    const remainingDays = driverVacationInfo.remaining_days
+    
+    if (remainingDays === 0) return 'no_days'
+    if (requestedDays > remainingDays) return 'exceeds_limit'
+    return null
+  }
+
   const validateDriverId = async (driverId: string) => {
     try {
-      // Validate format: should be 14 characters alphanumeric (like A2WPZ6D898ABGH)
-      const formatRegex = /^[A-Z0-9]{14}$/
+      // Validate format: should be 13-14 characters alphanumeric (like A97ONL7W6Y5CS or A2WPZ6D898ABGH)
+      const formatRegex = /^[A-Z0-9]{13,14}$/
       if (!formatRegex.test(driverId)) {
         return false
       }
       
       const response = await fetch(API_ENDPOINTS.driverById(driverId))
-      return response.ok
+      if (response.ok) {
+        const driver = await response.json()
+        // Auto-fill the driver name when driver ID is validated
+        setFormData(prev => ({ ...prev, driverName: driver.name }))
+        
+        // Store vacation information
+        setDriverVacationInfo({
+          name: driver.name,
+          annual_vacation_days: driver.annual_vacation_days || 25,
+          used_vacation_days: driver.used_vacation_days || 0,
+          remaining_days: (driver.annual_vacation_days || 25) - (driver.used_vacation_days || 0)
+        })
+        
+        return true
+      }
+      // Clear vacation info if validation fails
+      setDriverVacationInfo(null)
+      return false
     } catch (error) {
       console.error('Error validating driver ID:', error)
       return false
@@ -89,7 +141,7 @@ export default function HolidayRequestPage() {
       // Validate driver ID exists in database
       const isValidDriver = await validateDriverId(formData.driverId)
       if (!isValidDriver) {
-        setValidationError('Invalid driver ID format or driver not found. Please enter a valid 14-character driver ID (e.g., A2WPZ6D898ABGH).')
+        setValidationError(t('holidayRequest.invalidDriverId'))
         setIsSubmitting(false)
         return
       }
@@ -132,23 +184,39 @@ export default function HolidayRequestPage() {
         setIsSubmitted(true)
       } else {
         const errorData = await response.json()
-        setValidationError(errorData.message || 'Failed to submit request')
+        setValidationError(errorData.message || t('holidayRequest.submitFailed'))
       }
     } catch (error) {
       console.error('Error submitting holiday request:', error)
-      setValidationError('Failed to submit request. Please try again.')
+      setValidationError(t('holidayRequest.submitFailed'))
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const isFormValid = () => {
-    return formData.driverName && 
-           formData.driverId && 
+    return formData.driverId && 
            formData.startDate && 
            formData.endDate && 
            formData.reason &&
            new Date(formData.endDate) >= new Date(formData.startDate)
+  }
+
+  const handleDriverIdChange = async (driverId: string) => {
+    // Update the driver ID
+    setFormData(prev => ({ ...prev, driverId: driverId.toUpperCase() }))
+    
+    // Clear driver name and vacation info if ID is invalid length
+    if (driverId.length < 13 || driverId.length > 14) {
+      setFormData(prev => ({ ...prev, driverName: '' }))
+      setDriverVacationInfo(null)
+      return
+    }
+    
+    // Validate and auto-fill driver name if valid
+    if (driverId.length >= 13) {
+      await validateDriverId(driverId)
+    }
   }
 
   if (isSubmitted) {
@@ -166,19 +234,42 @@ export default function HolidayRequestPage() {
               </div>
               <div>
                 <span className="text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-                  Holiday Request
+                  {t('holidayRequest.title')}
                 </span>
-                <div className="text-xs text-slate-500 font-medium">Request Submitted</div>
+                <div className="text-xs text-slate-500 font-medium">{t('holidayRequest.success.title')}</div>
               </div>
             </div>
-            <Button 
-              variant="outline"
-              onClick={() => window.location.href = '/'}
-              className="border-2 border-slate-300 hover:border-emerald-300 hover:bg-emerald-50"
-            >
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Home
-            </Button>
+            <div className="flex items-center gap-4">
+              {/* Language Switcher */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Globe className="h-4 w-4" />
+                    {t('homepage.languageSwitcher')}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {availableLanguages.map((lang) => (
+                    <DropdownMenuItem
+                      key={lang.code}
+                      onClick={() => changeLanguage(lang.code)}
+                      className={currentLanguage === lang.code ? 'bg-slate-100' : ''}
+                    >
+                      {lang.nativeName}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <Button 
+                variant="outline"
+                onClick={() => window.location.href = '/'}
+                className="border-2 border-slate-300 hover:border-emerald-300 hover:bg-emerald-50"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                {t('holidayRequest.backToHome')}
+              </Button>
+            </div>
           </div>
         </nav>
 
@@ -189,9 +280,9 @@ export default function HolidayRequestPage() {
               <div className="w-20 h-20 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-500/25">
                 <CheckCircle className="h-10 w-10 text-white" />
               </div>
-              <h1 className="text-3xl font-bold text-slate-900 mb-4">Request Submitted Successfully!</h1>
+              <h1 className="text-3xl font-bold text-slate-900 mb-4">{t('holidayRequest.success.title')}</h1>
               <p className="text-lg text-slate-600">
-                Your holiday request has been received and is now being processed.
+                {t('holidayRequest.success.subtitle')}
               </p>
             </div>
 
@@ -202,7 +293,7 @@ export default function HolidayRequestPage() {
                   <div className="w-10 h-10 bg-gradient-to-r from-emerald-100 to-teal-100 rounded-xl flex items-center justify-center">
                     <CalendarDays className="h-5 w-5 text-emerald-600" />
                   </div>
-                  Request Details
+                  {t('holidayRequest.success.requestDetails')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -211,17 +302,23 @@ export default function HolidayRequestPage() {
                     <div className="p-4 bg-slate-50 rounded-xl">
                       <div className="flex items-center gap-2 mb-2">
                         <User className="h-4 w-4 text-slate-600" />
-                        <span className="text-sm font-medium text-slate-600">Driver Information</span>
+                        <span className="text-sm font-medium text-slate-600">{t('holidayRequest.success.driverInformation')}</span>
                       </div>
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-slate-600">Name:</span>
+                          <span className="text-slate-600">{t('holidayRequest.success.name')}</span>
                           <span className="font-semibold text-slate-900">{formData.driverName}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-slate-600">ID:</span>
+                          <span className="text-slate-600">{t('holidayRequest.success.id')}</span>
                           <span className="font-mono text-sm bg-slate-200 px-2 py-1 rounded">{formData.driverId}</span>
                         </div>
+                        {driverVacationInfo && (
+                          <div className="flex justify-between">
+                            <span className="text-slate-600">{t('holidayRequest.success.remainingDays')}</span>
+                            <span className="font-semibold text-blue-700">{driverVacationInfo.remaining_days - calculateDays()}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -230,15 +327,15 @@ export default function HolidayRequestPage() {
                     <div className="p-4 bg-emerald-50 rounded-xl">
                       <div className="flex items-center gap-2 mb-2">
                         <Calendar className="h-4 w-4 text-emerald-600" />
-                        <span className="text-sm font-medium text-emerald-700">Holiday Period</span>
+                        <span className="text-sm font-medium text-emerald-700">{t('holidayRequest.holidayPeriod')}</span>
                       </div>
                       <div className="space-y-2">
                         <div className="flex justify-between">
-                          <span className="text-emerald-700">Duration:</span>
-                          <span className="font-semibold text-emerald-900">{calculateDays()} days</span>
+                          <span className="text-emerald-700">{t('holidayRequest.success.duration')}</span>
+                          <span className="font-semibold text-emerald-900">{calculateDays()} {t('holidayRequest.success.days')}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-emerald-700">Dates:</span>
+                          <span className="text-emerald-700">{t('holidayRequest.success.dates')}</span>
                           <span className="font-semibold text-emerald-900 text-sm">
                             {formatDate(new Date(formData.startDate), 'MMM dd')} - {formatDate(new Date(formData.endDate), 'MMM dd, yyyy')}
                           </span>
@@ -255,15 +352,14 @@ export default function HolidayRequestPage() {
                       <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
                         <Clock className="h-4 w-4 text-blue-600" />
                       </div>
-                      <span className="font-semibold text-blue-900">Current Status</span>
+                      <span className="font-semibold text-blue-900">{t('holidayRequest.success.currentStatus')}</span>
                     </div>
                     <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                      Pending Review
+                      {t('holidayRequest.success.pendingReview')}
                     </Badge>
                   </div>
                   <p className="text-blue-700 text-sm leading-relaxed">
-                    Your request is in the approval queue. You'll receive a notification once it's reviewed. 
-                    Typical processing time is 1-2 business days.
+                    {t('holidayRequest.success.statusDescription')}
                   </p>
                 </div>
               </CardContent>
@@ -276,7 +372,7 @@ export default function HolidayRequestPage() {
                 className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg shadow-emerald-500/25 px-8"
                 size="lg"
               >
-                Return Home
+                {t('holidayRequest.success.returnHome')}
               </Button>
               <Button 
                 onClick={() => setIsSubmitted(false)}
@@ -284,7 +380,7 @@ export default function HolidayRequestPage() {
                 className="border-2 border-slate-300 hover:border-emerald-300 hover:bg-emerald-50 px-8"
                 size="lg"
               >
-                Submit Another Request
+                {t('holidayRequest.success.submitAnother')}
               </Button>
             </div>
           </div>
@@ -307,19 +403,42 @@ export default function HolidayRequestPage() {
             </div>
             <div>
               <span className="text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-                Holiday Request
+                {t('holidayRequest.title')}
               </span>
-              <div className="text-xs text-slate-500 font-medium">Submit Time Off Request</div>
+              <div className="text-xs text-slate-500 font-medium">{t('holidayRequest.submitTimeOff')}</div>
             </div>
           </div>
-          <Button 
-            variant="outline"
-            onClick={() => window.location.href = '/'}
-            className="border-2 border-slate-300 hover:border-indigo-300 hover:bg-indigo-50"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Home
-          </Button>
+          <div className="flex items-center gap-4">
+            {/* Language Switcher */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Globe className="h-4 w-4" />
+                  {t('homepage.languageSwitcher')}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {availableLanguages.map((lang) => (
+                  <DropdownMenuItem
+                    key={lang.code}
+                    onClick={() => changeLanguage(lang.code)}
+                    className={currentLanguage === lang.code ? 'bg-slate-100' : ''}
+                  >
+                    {lang.nativeName}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
+            <Button 
+              variant="outline"
+              onClick={() => window.location.href = '/'}
+              className="border-2 border-slate-300 hover:border-indigo-300 hover:bg-indigo-50"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              {t('holidayRequest.backToHome')}
+            </Button>
+          </div>
         </div>
       </nav>
 
@@ -329,15 +448,15 @@ export default function HolidayRequestPage() {
           <div className="text-center mb-12">
             <div className="inline-flex items-center space-x-2 bg-indigo-50 border border-indigo-200 rounded-full px-4 py-2 mb-8">
               <Calendar className="h-4 w-4 text-indigo-600" />
-              <span className="text-sm font-medium text-indigo-700">Holiday Request Portal</span>
-              <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Secure</Badge>
+              <span className="text-sm font-medium text-indigo-700">{t('holidayRequest.portalBadge')}</span>
+              <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">{t('holidayRequest.secureBadge')}</Badge>
             </div>
             
             <h1 className="text-4xl font-bold text-slate-900 mb-4">
-              Submit Holiday Request
+              {t('holidayRequest.submitTitle')}
             </h1>
             <p className="text-lg text-slate-600 max-w-xl mx-auto">
-              Submit your time off request with secure driver verification and instant processing.
+              {t('holidayRequest.subtitle')}
             </p>
           </div>
 
@@ -348,10 +467,10 @@ export default function HolidayRequestPage() {
                 <div className="w-10 h-10 bg-gradient-to-r from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center">
                   <User className="h-5 w-5 text-indigo-600" />
                 </div>
-                Request Details
+                {t('holidayRequest.success.requestDetails')}
               </CardTitle>
               <p className="text-slate-600 mt-2">
-                Please fill out all required fields to submit your holiday request.
+                {t('holidayRequest.fillRequired')}
               </p>
             </CardHeader>
             <CardContent>
@@ -360,38 +479,63 @@ export default function HolidayRequestPage() {
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 text-sm font-medium text-slate-700 pb-2 border-b border-slate-200">
                     <Shield className="h-4 w-4" />
-                    Driver Verification
+                    {t('holidayRequest.driverVerification')}
                   </div>
                   
-                  <div className="grid md:grid-cols-2 gap-6">
+                  <div className="grid md:grid-cols-1 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="driverId" className="text-slate-700 font-medium">Driver ID *</Label>
+                      <Label htmlFor="driverId" className="text-slate-700 font-medium">{t('holidayRequest.driverId')} *</Label>
                       <Input
                         id="driverId"
                         type="text"
                         value={formData.driverId}
-                        onChange={(e) => handleInputChange('driverId', e.target.value.toUpperCase())}
-                        placeholder="A2WPZ6D898ABGH"
+                        onChange={(e) => handleDriverIdChange(e.target.value)}
+                        placeholder={t('holidayRequest.driverIdPlaceholder')}
                         maxLength={14}
                         required
                         className="h-12 border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
                       />
                       <p className="text-xs text-slate-500">
-                        Enter your 14-character driver ID (letters and numbers only)
+                        {t('holidayRequest.driverIdHelp')}
                       </p>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="driverName" className="text-slate-700 font-medium">Full Name *</Label>
-                      <Input
-                        id="driverName"
-                        type="text"
-                        value={formData.driverName}
-                        onChange={(e) => handleInputChange('driverName', e.target.value)}
-                        placeholder="Enter your full name"
-                        required
-                        className="h-12 border-slate-300 focus:border-indigo-500 focus:ring-indigo-500"
-                      />
+                      {driverVacationInfo && (
+                        <div className={`mt-2 p-3 rounded-md ${
+                          driverVacationInfo.remaining_days === 0 
+                            ? 'bg-red-50 border border-red-200' 
+                            : 'bg-green-50 border border-green-200'
+                        }`}>
+                          <div className="flex items-center gap-2 mb-2">
+                            <User className={`h-4 w-4 ${
+                              driverVacationInfo.remaining_days === 0 ? 'text-red-600' : 'text-green-600'
+                            }`} />
+                            <span className={`font-medium ${
+                              driverVacationInfo.remaining_days === 0 ? 'text-red-700' : 'text-green-700'
+                            }`}>{t('holidayRequest.driverVerified')}</span> 
+                            <span className={
+                              driverVacationInfo.remaining_days === 0 ? 'text-red-700' : 'text-green-700'
+                            }>{driverVacationInfo.name}</span>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm">
+                            <div className="flex items-center gap-1">
+                              <Calendar className={`h-4 w-4 ${
+                                driverVacationInfo.remaining_days === 0 ? 'text-red-600' : 'text-blue-600'
+                              }`} />
+                              <span className="text-slate-600">{t('holidayRequest.remainingDays')}</span>
+                              <span className={`font-semibold ${
+                                driverVacationInfo.remaining_days === 0 ? 'text-red-700' : 'text-blue-700'
+                              }`}>{driverVacationInfo.remaining_days}</span>
+                            </div>
+                            <div className="text-slate-500">
+                              ({driverVacationInfo.used_vacation_days}/{driverVacationInfo.annual_vacation_days} {t('holidayRequest.daysUsed')})
+                            </div>
+                          </div>
+                          {driverVacationInfo.remaining_days === 0 && (
+                            <div className="mt-2 text-xs text-red-600">
+                              ⚠️ No vacation days remaining this year
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -400,12 +544,12 @@ export default function HolidayRequestPage() {
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 text-sm font-medium text-slate-700 pb-2 border-b border-slate-200">
                     <CalendarDays className="h-4 w-4" />
-                    Holiday Period
+                    {t('holidayRequest.holidayPeriod')}
                   </div>
                   
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="startDate" className="text-slate-700 font-medium">Start Date *</Label>
+                      <Label htmlFor="startDate" className="text-slate-700 font-medium">{t('holidayRequest.startDate')} *</Label>
                       <Input
                         id="startDate"
                         type="date"
@@ -418,7 +562,7 @@ export default function HolidayRequestPage() {
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="endDate" className="text-slate-700 font-medium">End Date *</Label>
+                      <Label htmlFor="endDate" className="text-slate-700 font-medium">{t('holidayRequest.endDate')} *</Label>
                       <Input
                         id="endDate"
                         type="date"
@@ -432,25 +576,84 @@ export default function HolidayRequestPage() {
                   </div>
 
                   {formData.startDate && formData.endDate && (
-                    <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200">
-                      <div className="flex items-center gap-2 text-indigo-700">
-                        <Clock className="h-4 w-4" />
-                        <span className="font-medium">
-                          Total days requested: <strong>{calculateDays()}</strong>
-                        </span>
+                    <div className="space-y-2">
+                      <div className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200">
+                        <div className="flex items-center gap-2 text-indigo-700">
+                          <Clock className="h-4 w-4" />
+                          <span className="font-medium">
+                            {t('holidayRequest.totalDays', { count: calculateDays() })}
+                          </span>
+                        </div>
                       </div>
+                      
+                      {(() => {
+                        const warningType = getVacationWarningType()
+                        
+                        if (warningType === 'no_days') {
+                          return (
+                            <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
+                              <div className="flex items-center gap-2 text-red-700 mb-2">
+                                <AlertCircle className="h-4 w-4" />
+                                <span className="font-medium">No vacation days available</span>
+                              </div>
+                              <p className="text-sm text-red-600">
+                                {t('holidayRequest.noDaysLeft')}
+                              </p>
+                            </div>
+                          )
+                        }
+                        
+                        if (warningType === 'exceeds_limit') {
+                          return (
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                              <div className="flex items-center gap-2 text-amber-700 mb-2">
+                                <AlertCircle className="h-4 w-4" />
+                                <span className="font-medium">Exceeds available days</span>
+                              </div>
+                              <p className="text-sm text-amber-600 mb-2">
+                                {t('holidayRequest.exceedsLimit', { 
+                                  requested: calculateDays(), 
+                                  remaining: driverVacationInfo?.remaining_days 
+                                })}
+                              </p>
+                              <p className="text-sm text-amber-700 font-medium">
+                                {t('holidayRequest.maxCanRequest', { 
+                                  maxDays: driverVacationInfo?.remaining_days 
+                                })}
+                              </p>
+                            </div>
+                          )
+                        }
+                        
+                        if (driverVacationInfo && calculateDays() > 0) {
+                          return (
+                            <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+                              <div className="flex items-center gap-2 text-green-700">
+                                <CheckCircle className="h-4 w-4" />
+                                <span className="text-sm">
+                                  {t('holidayRequest.vacationConfirm', { 
+                                    remaining: driverVacationInfo.remaining_days - calculateDays() 
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        }
+                        
+                        return null
+                      })()}
                     </div>
                   )}
                 </div>
 
                 {/* Reason Section */}
                 <div className="space-y-4">
-                  <Label htmlFor="reason" className="text-slate-700 font-medium">Reason for Request *</Label>
+                  <Label htmlFor="reason" className="text-slate-700 font-medium">{t('holidayRequest.reasonTitle')} *</Label>
                   <Textarea
                     id="reason"
                     value={formData.reason}
                     onChange={(e) => handleInputChange('reason', e.target.value)}
-                    placeholder="Please provide a reason for your holiday request (e.g., family vacation, personal time, medical appointment)"
+                    placeholder={t('holidayRequest.reasonPlaceholder')}
                     required
                     rows={4}
                     className="border-slate-300 focus:border-indigo-500 focus:ring-indigo-500 resize-none"
@@ -471,22 +674,34 @@ export default function HolidayRequestPage() {
                 <div className="pt-4">
                   <Button
                     type="submit"
-                    disabled={!isFormValid() || isSubmitting}
-                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 h-14 text-lg"
+                    disabled={!isFormValid() || isSubmitting || (driverVacationInfo?.remaining_days === 0) || isRequestExceedingLimit()}
+                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 h-14 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                     size="lg"
                   >
                     {isSubmitting ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Processing Request...
+                        {t('holidayRequest.processingRequest')}
                       </>
                     ) : (
                       <>
                         <Send className="mr-2 h-5 w-5" />
-                        Submit Holiday Request
+                        {t('holidayRequest.submitRequest')}
                       </>
                     )}
                   </Button>
+                  
+                  {/* Submit Button Help Text */}
+                  {driverVacationInfo?.remaining_days === 0 && (
+                    <p className="text-center text-sm text-red-600 mt-2">
+                      {t('holidayRequest.submitDisabledNoDays')}
+                    </p>
+                  )}
+                  {isRequestExceedingLimit() && driverVacationInfo && driverVacationInfo.remaining_days > 0 && (
+                    <p className="text-center text-sm text-amber-600 mt-2">
+                      {t('holidayRequest.submitDisabledExceeds')}
+                    </p>
+                  )}
                 </div>
               </form>
             </CardContent>
@@ -497,7 +712,7 @@ export default function HolidayRequestPage() {
             <div className="flex items-center gap-2 text-sm text-slate-600">
               <Shield className="h-4 w-4" />
               <span>
-                Your information is securely encrypted and validated against our driver database.
+                {t('holidayRequest.securityNotice')}
               </span>
             </div>
           </div>

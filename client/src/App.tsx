@@ -14,11 +14,14 @@ import Warnings from '@/pages/Warnings'
 import WarningCategoriesPage from '@/pages/WarningCategoriesPage'
 import WarningTemplatesPage from '@/pages/WarningTemplatesPage'
 import NotificationsPage from '@/pages/NotificationsPage'
-import NotificationTestPage from '@/pages/NotificationTestPage'
-import MobileOptimizationPage from '@/pages/MobileOptimizationPage'
 import Holidays from '@/pages/Holidays'
 import HolidayRequestPage from '@/pages/HolidayRequestPage'
 import AuditLogsPage from '@/pages/AuditLogsPage'
+import SchedulePlannerPage from '@/pages/SchedulePlannerPage'
+import ScheduleSettingsPage from '@/pages/ScheduleSettingsPage'
+import TimesheetIntegrationPage from '@/pages/TimesheetIntegrationPage'
+import ProjectSettingsPage from '@/pages/ProjectSettingsPage'
+import WeeklyPerformancePage from '@/pages/WeeklyPerformancePage'
 
 function App() {
   return (
@@ -71,6 +74,13 @@ function App() {
             </Layout>
           </ProtectedRoute>
         } />
+        <Route path="/performance" element={
+          <ProtectedRoute adminOnly={true}>
+            <Layout>
+              <WeeklyPerformancePage />
+            </Layout>
+          </ProtectedRoute>
+        } />
         <Route path="/warnings" element={
           <ProtectedRoute adminOnly={true}>
             <Layout>
@@ -99,20 +109,6 @@ function App() {
             </Layout>
           </ProtectedRoute>
         } />
-        <Route path="/notification-test" element={
-          <ProtectedRoute adminOnly={true}>
-            <Layout>
-              <NotificationTestPage />
-            </Layout>
-          </ProtectedRoute>
-        } />
-        <Route path="/mobile-optimization" element={
-          <ProtectedRoute adminOnly={true}>
-            <Layout>
-              <MobileOptimizationPage />
-            </Layout>
-          </ProtectedRoute>
-        } />
         <Route path="/holiday-requests" element={
           <ProtectedRoute adminOnly={true}>
             <Layout>
@@ -131,6 +127,34 @@ function App() {
           <ProtectedRoute adminOnly={true}>
             <Layout>
               <AuditLogsPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/schedule-planner" element={
+          <ProtectedRoute adminOnly={true}>
+            <Layout>
+              <SchedulePlannerPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/schedule-settings" element={
+          <ProtectedRoute adminOnly={true}>
+            <Layout>
+              <ScheduleSettingsPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/timesheet-integration" element={
+          <ProtectedRoute adminOnly={true}>
+            <Layout>
+              <TimesheetIntegrationPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/project-settings" element={
+          <ProtectedRoute adminOnly={true}>
+            <Layout>
+              <ProjectSettingsPage />
             </Layout>
           </ProtectedRoute>
         } />

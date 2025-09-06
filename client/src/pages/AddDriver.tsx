@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import ImageUpload from '@/components/common/ImageUpload'
 import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, MapPin, Plus, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { useProjectSettings } from '@/hooks/useProjectSettings'
 
 interface DriverFormData {
   name: string
@@ -42,6 +43,7 @@ export default function AddDriver() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const { data: settings } = useProjectSettings()
 
   const [formData, setFormData] = useState<DriverFormData>({
     name: '',
@@ -50,11 +52,25 @@ export default function AddDriver() {
     license_number: '',
     status: 'Active',
     employment_type: 'Fulltime',
-    annual_vacation_days: 25,
+    annual_vacation_days: 25, // Will be updated based on settings
     join_date: new Date().toISOString().split('T')[0],
     profile_picture: '',
     current_address: ''
   })
+
+  // Update vacation days when settings load or employment type changes
+  useEffect(() => {
+    if (settings) {
+      const vacationDays = formData.employment_type === 'Minijob' 
+        ? settings.defaultVacationDaysMinijob || 20
+        : settings.defaultVacationDaysFulltime || 30;
+      
+      setFormData(prev => ({
+        ...prev,
+        annual_vacation_days: vacationDays
+      }));
+    }
+  }, [settings, formData.employment_type]);
 
   const createMutation = useMutation({
     mutationFn: createDriver,
@@ -89,7 +105,10 @@ export default function AddDriver() {
   }
 
   const handleEmploymentTypeChange = (value: 'Fulltime' | 'Minijob') => {
-    const vacationDays = value === 'Minijob' ? 15 : 25
+    const vacationDays = settings
+      ? (value === 'Minijob' ? settings.defaultVacationDaysMinijob || 20 : settings.defaultVacationDaysFulltime || 30)
+      : (value === 'Minijob' ? 20 : 30); // Fallback values if settings not loaded
+
     setFormData({
       ...formData,
       employment_type: value,

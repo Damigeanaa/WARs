@@ -1,9 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../components/ui/dropdown-menu'
 import { useAuth } from '@/contexts/AuthContext'
+import { useLanguage } from '@/contexts/LanguageContext'
 import { API_ENDPOINTS } from '@/config/api'
 import { 
   Truck, 
@@ -19,7 +27,8 @@ import {
   Star,
   Zap,
   LogIn,
-  LogOut
+  LogOut,
+  Globe
 } from 'lucide-react'
 
 interface AnalyticsData {
@@ -51,6 +60,8 @@ interface AnalyticsData {
 export default function HomePage() {
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const { isAuthenticated, logout } = useAuth()
+  const { currentLanguage, changeLanguage, availableLanguages } = useLanguage()
+  const { t } = useTranslation()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -91,37 +102,61 @@ export default function HomePage() {
             </div>
             <div>
               <span className="text-xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-                FleetManager
+                {t('homepage.brand')}
               </span>
-              <div className="text-xs text-slate-500 font-medium">Professional Edition</div>
+              <div className="text-xs text-slate-500 font-medium">{t('homepage.footer.brandSubtitle')}</div>
             </div>
           </div>
-          <Button 
-            onClick={() => isAuthenticated ? navigate('/dashboard') : navigate('/login')}
-            className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 px-6"
-          >
-            {isAuthenticated ? (
-              <div className="flex items-center">
-                <Activity className="mr-2 h-4 w-4" />
-                Dashboard
-              </div>
-            ) : (
-              <div className="flex items-center">
-                <LogIn className="mr-2 h-4 w-4" />
-                Admin Login
-              </div>
-            )}
-          </Button>
-          {isAuthenticated && (
+          
+          <div className="flex items-center gap-4">
+            {/* Language Switcher */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Globe className="h-4 w-4" />
+                  {t('homepage.languageSwitcher')}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {availableLanguages.map((lang) => (
+                  <DropdownMenuItem
+                    key={lang.code}
+                    onClick={() => changeLanguage(lang.code)}
+                    className={currentLanguage === lang.code ? 'bg-slate-100' : ''}
+                  >
+                    {lang.nativeName}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button 
-              onClick={handleLogout}
-              variant="outline"
-              className="ml-2"
+              onClick={() => isAuthenticated ? navigate('/dashboard') : navigate('/login')}
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg shadow-indigo-500/25 px-6"
             >
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
+              {isAuthenticated ? (
+                <div className="flex items-center">
+                  <Activity className="mr-2 h-4 w-4" />
+                  {t('homepage.goDashboard')}
+                </div>
+              ) : (
+                <div className="flex items-center">
+                  <LogIn className="mr-2 h-4 w-4" />
+                  {t('homepage.adminLogin')}
+                </div>
+              )}
             </Button>
-          )}
+            {isAuthenticated && (
+              <Button 
+                onClick={handleLogout}
+                variant="outline"
+                className="ml-2"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                {t('auth.logout')}
+              </Button>
+            )}
+          </div>
         </div>
       </nav>
 
@@ -138,15 +173,11 @@ export default function HomePage() {
             </div>
             
             <h1 className="text-5xl md:text-6xl font-bold text-slate-900 mb-6 leading-tight">
-              Smart Fleet
-              <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent block">
-                Management
-              </span>
+              {t('homepage.heroTitle')}
             </h1>
             
             <p className="text-xl text-slate-600 max-w-3xl mx-auto mb-12 leading-relaxed">
-              Streamline your fleet operations with intelligent driver management, 
-              automated warnings, and seamless holiday planning.
+              {t('homepage.heroSubtitle')}
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
@@ -158,13 +189,13 @@ export default function HomePage() {
                 {isAuthenticated ? (
                   <>
                     <Activity className="mr-2 h-5 w-5" />
-                    Go to Dashboard
+                    {t('homepage.goDashboard')}
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </>
                 ) : (
                   <>
                     <LogIn className="mr-2 h-5 w-5" />
-                    Admin Login
+                    {t('homepage.adminLogin')}
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </>
                 )}
@@ -176,7 +207,7 @@ export default function HomePage() {
                 className="border-2 border-slate-300 hover:border-indigo-300 hover:bg-indigo-50 px-8 h-14 text-lg"
               >
                 <Calendar className="mr-2 h-5 w-5" />
-                Request Holiday
+                {t('homepage.requestHoliday')}
               </Button>
             </div>
           </div>
@@ -191,8 +222,8 @@ export default function HomePage() {
                 <div className="text-3xl font-bold text-slate-900 mb-2">
                   {analytics?.drivers.total_drivers || '124'}
                 </div>
-                <div className="text-slate-600 font-medium">Active Drivers</div>
-                <div className="text-xs text-green-600 font-medium mt-1">+12% this month</div>
+                <div className="text-slate-600 font-medium">{t('homepage.stats.activeDrivers')}</div>
+                <div className="text-xs text-green-600 font-medium mt-1">{t('homepage.stats.monthlyGrowth')}</div>
               </CardContent>
             </Card>
 
@@ -204,8 +235,8 @@ export default function HomePage() {
                 <div className="text-3xl font-bold text-slate-900 mb-2">
                   {analytics?.warnings.active_warnings || '3'}
                 </div>
-                <div className="text-slate-600 font-medium">Active Warnings</div>
-                <div className="text-xs text-red-600 font-medium mt-1">2 high priority</div>
+                <div className="text-slate-600 font-medium">{t('homepage.stats.activeWarnings')}</div>
+                <div className="text-xs text-red-600 font-medium mt-1">{t('homepage.stats.highPriority')}</div>
               </CardContent>
             </Card>
 
@@ -217,8 +248,8 @@ export default function HomePage() {
                 <div className="text-3xl font-bold text-slate-900 mb-2">
                   {analytics?.holidays.pending_requests || '5'}
                 </div>
-                <div className="text-slate-600 font-medium">Holiday Requests</div>
-                <div className="text-xs text-blue-600 font-medium mt-1">2 urgent reviews</div>
+                <div className="text-slate-600 font-medium">{t('homepage.stats.holidayRequests')}</div>
+                <div className="text-xs text-blue-600 font-medium mt-1">{t('homepage.stats.urgentReviews')}</div>
               </CardContent>
             </Card>
 
@@ -228,8 +259,8 @@ export default function HomePage() {
                   <BarChart3 className="h-7 w-7 text-white" />
                 </div>
                 <div className="text-3xl font-bold text-slate-900 mb-2">98%</div>
-                <div className="text-slate-600 font-medium">Fleet Efficiency</div>
-                <div className="text-xs text-green-600 font-medium mt-1">Above target</div>
+                <div className="text-slate-600 font-medium">{t('homepage.stats.fleetEfficiency')}</div>
+                <div className="text-xs text-green-600 font-medium mt-1">{t('homepage.stats.aboveTarget')}</div>
               </CardContent>
             </Card>
           </div>
@@ -241,13 +272,13 @@ export default function HomePage() {
                 <div className="w-16 h-16 bg-gradient-to-r from-indigo-100 to-purple-100 rounded-2xl flex items-center justify-center mb-6">
                   <Shield className="h-8 w-8 text-indigo-600" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-3">Smart Monitoring</h3>
+                <h3 className="text-xl font-bold text-slate-900 mb-3">{t('homepage.features.smartMonitoring.title')}</h3>
                 <p className="text-slate-600 leading-relaxed mb-4">
-                  Real-time driver performance tracking with intelligent alerts and automated compliance monitoring.
+                  {t('homepage.features.smartMonitoring.description')}
                 </p>
                 <div className="flex items-center text-sm text-indigo-600 font-medium">
                   <CheckCircle2 className="h-4 w-4 mr-2" />
-                  24/7 Automated Monitoring
+                  {t('homepage.features.smartMonitoring.feature')}
                 </div>
               </CardContent>
             </Card>
@@ -257,13 +288,13 @@ export default function HomePage() {
                 <div className="w-16 h-16 bg-gradient-to-r from-emerald-100 to-teal-100 rounded-2xl flex items-center justify-center mb-6">
                   <Clock className="h-8 w-8 text-emerald-600" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-3">Instant Processing</h3>
+                <h3 className="text-xl font-bold text-slate-900 mb-3">{t('homepage.features.instantProcessing.title')}</h3>
                 <p className="text-slate-600 leading-relaxed mb-4">
-                  Lightning-fast holiday approvals and warning management with streamlined workflows.
+                  {t('homepage.features.instantProcessing.description')}
                 </p>
                 <div className="flex items-center text-sm text-emerald-600 font-medium">
                   <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Sub-second Response Times
+                  {t('homepage.features.instantProcessing.feature')}
                 </div>
               </CardContent>
             </Card>
@@ -273,13 +304,13 @@ export default function HomePage() {
                 <div className="w-16 h-16 bg-gradient-to-r from-amber-100 to-orange-100 rounded-2xl flex items-center justify-center mb-6">
                   <Star className="h-8 w-8 text-amber-600" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-3">Premium Experience</h3>
+                <h3 className="text-xl font-bold text-slate-900 mb-3">{t('homepage.features.premiumExperience.title')}</h3>
                 <p className="text-slate-600 leading-relaxed mb-4">
-                  Intuitive interface designed for efficiency with enterprise-grade security and reliability.
+                  {t('homepage.features.premiumExperience.description')}
                 </p>
                 <div className="flex items-center text-sm text-amber-600 font-medium">
                   <CheckCircle2 className="h-4 w-4 mr-2" />
-                  99.9% Uptime Guarantee
+                  {t('homepage.features.premiumExperience.feature')}
                 </div>
               </CardContent>
             </Card>
@@ -291,23 +322,23 @@ export default function HomePage() {
               <div className="flex items-center justify-center gap-3 mb-4">
                 <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
                 <Activity className="h-6 w-6 text-emerald-600" />
-                <span className="text-xl font-bold text-emerald-900">All Systems Operational</span>
+                <span className="text-xl font-bold text-emerald-900">{t('homepage.systemStatus.operational')}</span>
               </div>
               <p className="text-emerald-700 mb-4">
-                Real-time monitoring shows all services running optimally
+                {t('homepage.systemStatus.monitoring')}
               </p>
               <div className="flex items-center justify-center gap-6 text-sm">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                  <span className="text-emerald-800">API Services</span>
+                  <span className="text-emerald-800">{t('homepage.systemStatus.apiServices')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                  <span className="text-emerald-800">Database</span>
+                  <span className="text-emerald-800">{t('homepage.systemStatus.database')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                  <span className="text-emerald-800">Notifications</span>
+                  <span className="text-emerald-800">{t('homepage.systemStatus.notifications')}</span>
                 </div>
               </div>
             </CardContent>
@@ -325,16 +356,16 @@ export default function HomePage() {
                 <Truck className="h-4 w-4 text-white" />
               </div>
               <div>
-                <span className="font-bold text-slate-900">FleetManager</span>
-                <div className="text-xs text-slate-500">Professional Edition</div>
+                <span className="font-bold text-slate-900">{t('homepage.brand')}</span>
+                <div className="text-xs text-slate-500">{t('homepage.footer.brandSubtitle')}</div>
               </div>
             </div>
             <div className="text-center md:text-right">
               <div className="text-sm text-slate-600 mb-1">
-                © 2025 FleetManager. Built for modern fleet operations.
+                {t('homepage.footer.copyright')}
               </div>
               <div className="text-xs text-slate-500">
-                Trusted by 500+ transportation companies worldwide
+                {t('homepage.footer.trusted')}
               </div>
             </div>
           </div>

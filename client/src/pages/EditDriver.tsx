@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator'
 import ImageUpload from '@/components/common/ImageUpload'
 import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, MapPin, Save, X } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { useProjectSettings } from '@/hooks/useProjectSettings'
 
 interface Driver {
   id: number
@@ -67,6 +68,9 @@ export default function EditDriver() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  
+  // Fetch project settings for vacation day defaults
+  const { data: settings } = useProjectSettings()
 
   const [formData, setFormData] = useState<DriverFormData>({
     name: '',
@@ -130,7 +134,11 @@ export default function EditDriver() {
   }
 
   const handleEmploymentTypeChange = (value: 'Fulltime' | 'Minijob') => {
-    const vacationDays = value === 'Minijob' ? 15 : 25
+    // Use dynamic vacation days from settings if available, otherwise fallback to defaults
+    const vacationDays = value === 'Minijob' 
+      ? (settings?.defaultVacationDaysMinijob ?? 20)
+      : (settings?.defaultVacationDaysFulltime ?? 30)
+    
     setFormData({
       ...formData,
       employment_type: value,
@@ -425,14 +433,10 @@ export default function EditDriver() {
                       {remainingVacationDays}
                     </Badge>
                   </div>
-                  <div className="w-full bg-secondary rounded-full h-2">
-                    <div 
-                      className="bg-primary h-2 rounded-full transition-all duration-300"
-                      style={{ 
-                        // Dynamic progress bar requires inline styles for CSS custom properties
-                        '--progress-width': `${Math.min((driver.used_vacation_days / driver.annual_vacation_days) * 100, 100)}%`,
-                        width: 'var(--progress-width)'
-                      } as React.CSSProperties}
+                  <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-primary h-2 rounded-full transition-all duration-300 progress-bar"
+                      data-pct={Math.min((driver.used_vacation_days / driver.annual_vacation_days) * 100, 100)}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground text-center">
