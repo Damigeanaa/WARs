@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Upload, FileText, X, CheckCircle, AlertCircle } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Upload, FileText, X, CheckCircle, AlertCircle, Users, BarChart3 } from 'lucide-react'
 
 interface ImportDriverModalProps {
   isOpen: boolean
@@ -20,6 +21,7 @@ interface ImportResult {
   success: boolean
   message: string
   imported?: number
+  updated?: number
   errors?: string[]
 }
 
@@ -27,6 +29,7 @@ export default function ImportDriverModal({ isOpen, onClose }: ImportDriverModal
   const [file, setFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [result, setResult] = useState<ImportResult | null>(null)
+  const [importType, setImportType] = useState<'drivers' | 'performance'>('drivers')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const queryClient = useQueryClient()
 

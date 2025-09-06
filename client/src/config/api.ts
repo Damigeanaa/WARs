@@ -40,6 +40,10 @@ export const API_ENDPOINTS = {
   workingTourById: (id: string) => `${API_BASE_URL}/api/working-tours/${id}`,
   workingToursBulk: `${API_BASE_URL}/api/working-tours/bulk`,
   
+  // Work Patterns
+  workPatterns: `${API_BASE_URL}/api/work-patterns`,
+  workPatternByDriverId: (driverId: string) => `${API_BASE_URL}/api/work-patterns/driver/${driverId}`,
+  
   // Schedules
   schedules: `${API_BASE_URL}/api/schedules`,
   schedulesBulk: `${API_BASE_URL}/api/schedules/bulk`,

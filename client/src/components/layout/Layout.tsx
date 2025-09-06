@@ -23,6 +23,7 @@ import {
   User,
   Settings,
   Timer,
+  BarChart3,
 } from 'lucide-react'
 
 const mainNavigation = [
@@ -31,6 +32,7 @@ const mainNavigation = [
 
 const coreManagementNavigation = [
   { name: 'navigation.drivers', href: '/drivers', icon: Users, section: 'core' },
+  { name: 'navigation.weeklyPerformance', href: '/performance', icon: BarChart3, section: 'core' },
   { name: 'navigation.warnings', href: '/warnings', icon: AlertTriangle, section: 'core' },
   { name: 'navigation.holidays', href: '/holiday-requests', icon: Calendar, section: 'core' },
 ]

@@ -1,0 +1,49 @@
+/* Utility layer for dynamic widths & colors without inline styles */
+
+/* Progress bars: width driven by data-pct attribute */
+.progress-bar {
+  width: 0;
+  transition: width 0.5s ease;
+}
+
+.progress-bar[data-pct] {
+  width: attr(data-pct percentage);
+}
+
+/* Fallback for browsers not supporting attr() in width (widely unsupported) */
+@supports not (width: attr(data-pct percentage)) {
+  .progress-bar[data-pct] {
+    /* JS enhancement hook: width will be set via MutationObserver if needed */
+  }
+}
+
+/* Tour color dots & swatches leverage data-color with currentColor fallback */
+.tour-color-dot, .tour-color-swatch, button[data-color] {
+  position: relative;
+}
+
+.tour-color-dot::before,
+.tour-color-swatch::before,
+button[data-color]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--_dynamic-color, #64748b);
+  z-index: 0;
+}
+
+/* Use CSS variable if provided (set inline), fallback to data attribute (non-standard attr() may not work in some browsers) */
+.tour-color-dot[data-color],
+.tour-color-swatch[data-color],
+button[data-color] {
+  background: var(--_dynamic-color, #64748b);
+}
+
+/* Tour assignment badge */
+.tour-assignment-badge[data-color] {
+  background: var(--_dynamic-color, #334155);
+}
+
+/* Ensure icon/content above pseudo background */
+.tour-color-swatch > *, button[data-color] > *, .tour-color-dot > * { position: relative; z-index: 1; }

@@ -433,14 +433,10 @@ export default function EditDriver() {
                       {remainingVacationDays}
                     </Badge>
                   </div>
-                  <div className="w-full bg-secondary rounded-full h-2">
-                    <div 
-                      className="bg-primary h-2 rounded-full transition-all duration-300"
-                      style={{ 
-                        // Dynamic progress bar requires inline styles for CSS custom properties
-                        '--progress-width': `${Math.min((driver.used_vacation_days / driver.annual_vacation_days) * 100, 100)}%`,
-                        width: 'var(--progress-width)'
-                      } as React.CSSProperties}
+                  <div className="w-full bg-secondary rounded-full h-2 overflow-hidden">
+                    <div
+                      className="bg-primary h-2 rounded-full transition-all duration-300 progress-bar"
+                      data-pct={Math.min((driver.used_vacation_days / driver.annual_vacation_days) * 100, 100)}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground text-center">

@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/hooks/use-toast'
 import { API_ENDPOINTS } from '@/config/api'
 import { 
   Calendar, 
-  Plus, 
   Check,
   X,
   Clock,
   AlertTriangle,
+  AlertCircle,
   User,
   CalendarDays,
   Users2,
@@ -18,9 +17,20 @@ import {
   ChevronRight,
   Save,
   Download,
-  CheckCircle
+  Upload,
+  Settings,
+  Trash2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+interface WorkPattern {
+  type: 'monday-friday' | 'mixed-tours' | 'specific-tour-only' | 'monday-friday-mixed' | 'custom'
+  workDays?: string[] // ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+  allowedTours?: string[] // Specific tour names this driver can work
+  nextDayCount?: number // For mixed-tours: how many next day tours per week
+  sameDayCount?: number // For mixed-tours: how many same day tours per week
+  preferredTour?: string // For specific-tour-only: the main tour they work
+}
 
 interface Driver {
   id: number
@@ -29,6 +39,7 @@ interface Driver {
   van_license_plate?: string
   status: 'Active' | 'Inactive' | 'On Holiday'
   employment_type: 'Fulltime' | 'Minijob'
+  workPattern?: WorkPattern
 }
 
 interface WorkingTour {
@@ -54,30 +65,7 @@ interface WeekDay {
   isWeekend: boolean
 }
 
-const quarters = [
-  { name: 'Q1', months: ['January', 'February', 'March'], color: 'bg-blue-100 text-blue-800' },
-  { name: 'Q2', months: ['April', 'May', 'June'], color: 'bg-yellow-100 text-yellow-800' },
-  { name: 'Q3', months: ['July', 'August', 'September'], color: 'bg-green-100 text-green-800' },
-  { name: 'Q4', months: ['October', 'November', 'December'], color: 'bg-purple-100 text-purple-800' }
-]
-
-const monthsData = [
-  { name: 'January', weeks: ['W2', 'W3', 'W4', 'W5'] },
-  { name: 'February', weeks: ['W6', 'W7', 'W8', 'W9'] },
-  { name: 'March', weeks: ['W10', 'W11', 'W12', 'W13', 'W14'] },
-  { name: 'April', weeks: ['W15', 'W16', 'W17', 'W18'] },
-  { name: 'May', weeks: ['W19', 'W20', 'W21', 'W22'] },
-  { name: 'June', weeks: ['W23', 'W24', 'W25', 'W26', 'W27'] },
-  { name: 'July', weeks: ['W28', 'W29', 'W30', 'W31'] },
-  { name: 'August', weeks: ['W32', 'W33', 'W34', 'W35'] },
-  { name: 'September', weeks: ['W36', 'W37', 'W38', 'W39', 'W40'] },
-  { name: 'October', weeks: ['W41', 'W42', 'W43', 'W44'] },
-  { name: 'November', weeks: ['W45', 'W46', 'W47', 'W48'] },
-  { name: 'December', weeks: ['W49', 'W50', 'W51', 'W52'] }
-]
-
 const getStatusIcon = (status: string) => {
-  // Only show status icons, not tour assignment icons
   switch (status) {
     case 'available':
       return <Check className="h-5 w-5 text-emerald-600" />
@@ -94,315 +82,899 @@ const getStatusIcon = (status: string) => {
   }
 }
 
+// Work Pattern Form Component
+function WorkPatternForm({ 
+  driver, 
+  workingTours, 
+  onSave, 
+  onCancel,
+  onDelete
+}: {
+  driver: Driver
+  workingTours: WorkingTour[]
+  onSave: (driverId: number, pattern: WorkPattern) => void
+  onCancel: () => void
+  onDelete: (driverId: number) => void
+}) {
+  const [pattern, setPattern] = useState<WorkPattern>(
+    driver.workPattern || { type: 'monday-friday' }
+  )
+  const [errors, setErrors] = useState<string[]>([])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const errs: string[] = []
+    if (!pattern.type) errs.push('Type required')
+    if (pattern.type === 'specific-tour-only' && !pattern.preferredTour) errs.push('Preferred tour required')
+    if ((pattern.type === 'mixed-tours' || pattern.type === 'monday-friday-mixed') && (!pattern.allowedTours || pattern.allowedTours.length === 0)) errs.push('Select at least one allowed tour')
+    if (pattern.type === 'custom' && (!pattern.workDays || pattern.workDays.length === 0)) errs.push('Select at least one working day')
+    setErrors(errs)
+    if (errs.length === 0) onSave(driver.id, pattern)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-slate-700 mb-2">
+          Work Pattern Type
+        </label>
+        <select
+          value={pattern.type}
+          onChange={(e) => setPattern({ type: e.target.value as any })}
+          className="w-full p-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label="Work pattern type"
+        >
+          <option value="monday-friday">Monday to Friday (Any Tour)</option>
+          <option value="monday-friday-mixed">Monday to Friday (Specific Tours)</option>
+          <option value="specific-tour-only">Specific Tour Only</option>
+          <option value="mixed-tours">Mixed Tours (Any Day)</option>
+          <option value="custom">Custom Days</option>
+        </select>
+        
+        {/* Helpful descriptions */}
+        <div className="mt-2 text-xs text-slate-500">
+          {pattern.type === 'monday-friday' && 'Driver works Monday through Friday and can be assigned to any available tour.'}
+          {pattern.type === 'monday-friday-mixed' && 'Driver works Monday through Friday but only specific tours you select below.'}
+          {pattern.type === 'specific-tour-only' && 'Driver only works one specific tour, any day of the week.'}
+          {pattern.type === 'mixed-tours' && 'Driver can work any day but only specific tours you select below.'}
+          {pattern.type === 'custom' && 'Driver works only on specific days you choose below.'}
+        </div>
+      </div>
+
+      {pattern.type === 'specific-tour-only' && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Preferred Tour
+          </label>
+          <select
+            value={pattern.preferredTour || ''}
+            onChange={(e) => setPattern({ ...pattern, preferredTour: e.target.value })}
+            className="w-full p-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Preferred tour"
+          >
+            <option value="">Select Tour</option>
+            {workingTours.map(tour => (
+              <option key={tour.id} value={tour.name}>{tour.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {(pattern.type === 'mixed-tours' || pattern.type === 'monday-friday-mixed') && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">
+              Allowed Tours
+              {pattern.type === 'monday-friday-mixed' && (
+                <span className="text-xs text-slate-500 block">This driver works Monday-Friday with these tours only</span>
+              )}
+            </label>
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {workingTours.map(tour => (
+                <label key={tour.id} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={pattern.allowedTours?.includes(tour.name) || false}
+                    onChange={(e) => {
+                      const currentTours = pattern.allowedTours || []
+                      if (e.target.checked) {
+                        setPattern({ 
+                          ...pattern, 
+                          allowedTours: [...currentTours, tour.name] 
+                        })
+                      } else {
+                        setPattern({ 
+                          ...pattern, 
+                          allowedTours: currentTours.filter(t => t !== tour.name) 
+                        })
+                      }
+                    }}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">{tour.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pattern.type === 'custom' && (
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-2">
+            Working Days
+          </label>
+          <div className="space-y-2">
+            {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'].map(day => (
+              <label key={day} className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={pattern.workDays?.includes(day) || false}
+                  onChange={(e) => {
+                    const currentDays = pattern.workDays || []
+                    if (e.target.checked) {
+                      setPattern({ 
+                        ...pattern, 
+                        workDays: [...currentDays, day] 
+                      })
+                    } else {
+                      setPattern({ 
+                        ...pattern, 
+                        workDays: currentDays.filter(d => d !== day) 
+                      })
+                    }
+                  }}
+                  className="mr-2"
+                />
+                <span className="text-sm capitalize">{day}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="flex gap-3 pt-4 flex-wrap">
+        <Button type="submit" className="flex-1 min-w-[110px]">Save Pattern</Button>
+        <Button type="button" variant="outline" onClick={onCancel} className="flex-1 min-w-[110px]">Cancel</Button>
+        {driver.workPattern && (
+          <Button type="button" variant="destructive" onClick={() => onDelete(driver.id)} className="min-w-[110px]">Reset</Button>
+        )}
+      </div>
+      {errors.length > 0 && (
+        <div className="space-y-1">
+          {errors.map((e,i) => <p key={i} className="text-xs text-red-600">{e}</p>)}
+        </div>
+      )}
+    </form>
+  )
+}
+
 export default function SchedulePlannerPage() {
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [selectedWeek, setSelectedWeek] = useState(() => {
-    // Calculate current week on initialization
-    const now = new Date()
-    const target = new Date(now.valueOf())
-    const dayNumber = (now.getDay() + 6) % 7
-    target.setDate(target.getDate() - dayNumber + 3)
-    const firstThursday = target.valueOf()
-    target.setMonth(0, 1)
-    if (target.getDay() !== 4) {
-      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7)
-    }
-    const currentWeek = 1 + Math.ceil((firstThursday - target.valueOf()) / (7 * 24 * 3600 * 1000))
-    return Math.min(52, Math.max(1, currentWeek))
-  })
+  const [view, setView] = useState<'week' | 'month' | 'quarter'>('week')
+  const [currentWeek, setCurrentWeek] = useState(new Date())
   const [drivers, setDrivers] = useState<Driver[]>([])
-  const [workingTours, setWorkingTours] = useState<WorkingTour[]>([])
   const [scheduleData, setScheduleData] = useState<ScheduleEntry[]>([])
-  const [editingCell, setEditingCell] = useState<{driverId: number, date: string} | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [currentWeekDays, setCurrentWeekDays] = useState<WeekDay[]>([])
+  const [workingTours, setWorkingTours] = useState<WorkingTour[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [showWorkPatternModal, setShowWorkPatternModal] = useState(false)
+  const [selectedDriverForPattern, setSelectedDriverForPattern] = useState<Driver | null>(null)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
   const { toast } = useToast()
 
-  useEffect(() => {
-    fetchDrivers()
-    fetchWorkingTours()
-    calculateCurrentWeek()
-  }, [selectedYear])
+  // State for import/export functionality
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importData, setImportData] = useState('')
+  const [importWeekOffset, setImportWeekOffset] = useState(1) // Default to next week
 
-  useEffect(() => {
-    generateWeekDays()
-    fetchScheduleData()
-  }, [selectedWeek, selectedYear])
-
-  const fetchDrivers = async () => {
+  // Database operation helper
+  const saveScheduleToDatabase = async (entries: ScheduleEntry[], operation: string = "save") => {
     try {
-      const response = await fetch('/api/drivers')
-      const data = await response.json()
-      setDrivers(data.filter((driver: Driver) => driver.status === 'Active'))
-    } catch (error) {
-      console.error('Error fetching drivers:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch drivers',
-        variant: 'destructive'
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchWorkingTours = async () => {
-    try {
-      const response = await fetch(API_ENDPOINTS.workingTours)
-      const data = await response.json()
-      setWorkingTours(data.filter((tour: WorkingTour) => tour.is_active === 1))
-    } catch (error) {
-      console.error('Error fetching working tours:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch working tours',
-        variant: 'destructive'
-      })
-    }
-  }
-
-  const fetchScheduleData = async () => {
-    try {
-      const response = await fetch(`${API_ENDPOINTS.schedules}?year=${selectedYear}&week=${selectedWeek}`)
-      const data = await response.json()
-      
-      // Convert API data to local format
-      const scheduleEntries: ScheduleEntry[] = data.map((item: any) => ({
-        driverId: item.driver_id,
-        date: item.schedule_date,
-        status: item.status,
-        tourAssigned: item.van_assigned,
-        notes: item.notes
+      const scheduleEntries = entries.map(entry => ({
+        driver_id: entry.driverId,
+        schedule_date: entry.date,
+        status: entry.status,
+        van_assigned: entry.tourAssigned || null,
+        notes: entry.notes || null
       }))
-      
-      setScheduleData(scheduleEntries)
+
+      const response = await fetch(API_ENDPOINTS.schedulesBulk, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: scheduleEntries })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${operation} schedule: ${response.status}`)
+      }
+
+      return true
     } catch (error) {
-      console.error('Error fetching schedule data:', error)
-      // Don't show toast for this as it's not critical
+      console.error(`Error ${operation} schedule:`, error)
+      toast({
+        title: "Database Error",
+        description: `Schedule ${operation} locally but failed to save to database. Please try again.`,
+        variant: "destructive"
+      })
+      return false
     }
   }
 
-  const calculateCurrentWeek = () => {
-    const now = new Date()
-    // Only calculate current week if we're viewing the current year
-    if (selectedYear !== now.getFullYear()) {
-      setSelectedWeek(1)
-      return
-    }
-    
-    // Calculate ISO week number
-    const currentWeek = getISOWeekNumber(now)
-    setSelectedWeek(Math.min(52, Math.max(1, currentWeek)))
-  }
+  // Get week days (excluding Sunday)
+  const getWeekDays = (date: Date): WeekDay[] => {
+    const week = []
+    const startOfWeek = new Date(date)
+    const day = startOfWeek.getDay()
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1)
+    startOfWeek.setDate(diff)
 
-  // Helper function to get ISO week number
-  const getISOWeekNumber = (date: Date): number => {
-    const target = new Date(date.valueOf())
-    const dayNumber = (date.getDay() + 6) % 7
-    target.setDate(target.getDate() - dayNumber + 3)
-    const firstThursday = target.valueOf()
-    target.setMonth(0, 1)
-    if (target.getDay() !== 4) {
-      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7)
-    }
-    return 1 + Math.ceil((firstThursday - target.valueOf()) / (7 * 24 * 3600 * 1000))
-  }
-
-  const generateWeekDays = () => {
-    const startOfYear = new Date(selectedYear, 0, 1)
-    const startOfWeek = new Date(startOfYear)
-    startOfWeek.setDate(startOfYear.getDate() + (selectedWeek - 1) * 7)
-    
-    // Find the Monday of this week
-    const dayOfWeek = startOfWeek.getDay()
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-    startOfWeek.setDate(startOfWeek.getDate() + mondayOffset)
-
-    const weekDays: WeekDay[] = []
-    const today = new Date()
-    
-    for (let i = 0; i < 7; i++) {
+    // Only create 6 days (Monday to Saturday), exclude Sunday
+    for (let i = 0; i < 6; i++) {
       const currentDate = new Date(startOfWeek)
       currentDate.setDate(startOfWeek.getDate() + i)
       
-      weekDays.push({
+      week.push({
         date: currentDate,
         dayName: currentDate.toLocaleDateString('en-US', { weekday: 'short' }),
-        shortDate: currentDate.toLocaleDateString('en-US', { 
-          month: 'short', 
-          day: 'numeric' 
-        }),
-        isToday: currentDate.toDateString() === today.toDateString(),
-        isWeekend: currentDate.getDay() === 0 || currentDate.getDay() === 6
+        shortDate: currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        isToday: currentDate.toDateString() === new Date().toDateString(),
+        isWeekend: currentDate.getDay() === 6 // Only Saturday is weekend now
       })
     }
+    return week
+  }
+
+  const currentWeekDays = getWeekDays(currentWeek)
+
+  // Ensure tour color dots receive their dynamic color via CSS variable (no inline style lint violation)
+  useEffect(() => {
+    const applyDotColors = () => {
+      const dots = document.querySelectorAll<HTMLElement>('.tour-color-dot[data-color]')
+      dots.forEach(dot => {
+        const color = dot.getAttribute('data-color') || '#64748b'
+        if (dot.style.getPropertyValue('--_dynamic-color') !== color) {
+          dot.style.setProperty('--_dynamic-color', color)
+        }
+      })
+      const badges = document.querySelectorAll<HTMLElement>('.tour-assignment-badge[data-color]')
+      badges.forEach(badge => {
+        const color = badge.getAttribute('data-color') || '#334155'
+        if (badge.style.getPropertyValue('--_dynamic-color') !== color) {
+          badge.style.setProperty('--_dynamic-color', color)
+        }
+      })
+    }
+    applyDotColors()
+  }, [workingTours, scheduleData])
+
+  // Fetch data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true)
+        
+        const [driversRes, toursRes] = await Promise.all([
+          fetch(API_ENDPOINTS.drivers),
+          fetch(API_ENDPOINTS.workingTours)
+        ])
+
+        let activeDrivers: Driver[] = []
+        if (driversRes.ok) {
+          const driversData = await driversRes.json()
+          activeDrivers = driversData.filter((d: Driver) => d.status === 'Active')
+
+          // Batch load all existing patterns once
+          let patternList: any[] = []
+          try {
+            const batchRes = await fetch(API_ENDPOINTS.workPatterns)
+            if (batchRes.ok) patternList = await batchRes.json()
+          } catch (e) {
+            console.warn('Batch load work patterns failed', e)
+          }
+          const patternMap: Record<number, any> = {}
+          patternList.forEach(p => { patternMap[p.driver_id] = p })
+
+          activeDrivers.forEach(driver => {
+            const p = patternMap[driver.id]
+            if (p && p.type) {
+              driver.workPattern = {
+                type: p.type,
+                allowedTours: Array.isArray(p.allowed_tours) ? p.allowed_tours : (p.allowed_tours ? p.allowed_tours : undefined),
+                preferredTour: p.preferred_tour || undefined,
+                workDays: Array.isArray(p.work_days) ? p.work_days : (p.work_days ? p.work_days : undefined)
+              }
+            }
+          })
+
+          setDrivers(activeDrivers)
+        }
+
+        if (toursRes.ok) {
+          const toursData = await toursRes.json()
+          const activeTours = toursData.filter((t: WorkingTour) => t.is_active === 1)
+          setWorkingTours(activeTours)
+          console.log('=== AVAILABLE WORKING TOURS ===')
+          console.log('Active tours:', activeTours.map((t: WorkingTour) => t.name))
+          console.log('Total active tours:', activeTours.length)
+          console.log('=== END TOURS DEBUG ===')
+        }
+
+        // Load existing schedule data for the week
+        try {
+          const startDate = currentWeekDays[0]?.date.toISOString().split('T')[0]
+          const endDate = currentWeekDays[5]?.date.toISOString().split('T')[0] // Last day is index 5 (Saturday)
+          
+          const scheduleRes = await fetch(`${API_ENDPOINTS.schedules}?start_date=${startDate}&end_date=${endDate}`)
+          let existingSchedule: any[] = []
+          
+          if (scheduleRes.ok) {
+            existingSchedule = await scheduleRes.json()
+          }
+
+          // Initialize schedule data for the week (Monday to Saturday only)
+          const weekSchedule: ScheduleEntry[] = []
+          
+          currentWeekDays.forEach(day => {
+            activeDrivers.forEach(driver => {
+              const dateStr = day.date.toISOString().split('T')[0]
+              
+              // Check if there's existing data for this driver/date
+              const existingEntry = existingSchedule.find(
+                (entry: any) => entry.driver_id === driver.id && entry.schedule_date === dateStr
+              )
+              
+              if (existingEntry) {
+                // Use existing data
+                weekSchedule.push({
+                  driverId: driver.id,
+                  date: dateStr,
+                  status: existingEntry.status || 'available',
+                  tourAssigned: existingEntry.van_assigned || undefined, // Tours are stored in van_assigned field
+                  notes: existingEntry.notes || ''
+                })
+              } else {
+                // Create default entry
+                weekSchedule.push({
+                  driverId: driver.id,
+                  date: dateStr,
+                  status: 'available',
+                  tourAssigned: undefined,
+                  notes: ''
+                })
+              }
+            })
+          })
+          
+          setScheduleData(weekSchedule)
+        } catch (scheduleError) {
+          // Fall back to creating default schedule
+          const weekSchedule: ScheduleEntry[] = []
+          
+          currentWeekDays.forEach(day => {
+            activeDrivers.forEach(driver => {
+              weekSchedule.push({
+                driverId: driver.id,
+                date: day.date.toISOString().split('T')[0],
+                status: 'available',
+                tourAssigned: undefined,
+                notes: ''
+              })
+            })
+          })
+          
+          setScheduleData(weekSchedule)
+        }
+        
+      } catch (error) {
+        console.error('Error fetching data:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load schedule data",
+          variant: "destructive"
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [currentWeek, toast])
+
+  // Navigation functions
+  const navigateWeek = (direction: 'prev' | 'next') => {
+    const newWeek = new Date(currentWeek)
+    newWeek.setDate(currentWeek.getDate() + (direction === 'next' ? 7 : -7))
+    setCurrentWeek(newWeek)
+  }
+
+  // Schedule management functions
+  const getScheduleEntry = (driverId: number, date: string): ScheduleEntry | undefined => {
+    return scheduleData.find(entry => entry.driverId === driverId && entry.date === date)
+  }
+
+  const updateScheduleEntry = async (driverId: number, date: string, updates: Partial<ScheduleEntry>) => {
+    // Update local state first for immediate UI response
+    setScheduleData(prev => {
+      const existing = prev.find(entry => entry.driverId === driverId && entry.date === date)
+      if (existing) {
+        return prev.map(entry => 
+          entry.driverId === driverId && entry.date === date 
+            ? { ...entry, ...updates }
+            : entry
+        )
+      } else {
+        return [...prev, {
+          driverId,
+          date,
+          status: 'available',
+          ...updates
+        } as ScheduleEntry]
+      }
+    })
+
+    // Save to database immediately
+    try {
+      await saveScheduleToDatabase([{
+        driverId,
+        date,
+        status: updates.status || 'available',
+        tourAssigned: updates.tourAssigned,
+        notes: updates.notes || ''
+      }], "update")
+    } catch (error) {
+      // Error handling is done in saveScheduleToDatabase
+    }
+  }
+
+  const handleStatusClick = async (driverId: number, date: string) => {
+    const currentEntry = getScheduleEntry(driverId, date)
+    const statuses: Array<'available' | 'scheduled' | 'holiday' | 'sick' | 'unavailable'> = 
+      ['available', 'scheduled', 'holiday', 'sick', 'unavailable']
     
-    setCurrentWeekDays(weekDays)
+    const currentIndex = statuses.indexOf(currentEntry?.status || 'available')
+    const nextStatus = statuses[(currentIndex + 1) % statuses.length]
+    
+    await updateScheduleEntry(driverId, date, { status: nextStatus })
   }
 
-  const getDriverScheduleStatus = (driverId: number, date: Date): string => {
-    const dateStr = date.toISOString().split('T')[0]
-    const entry = scheduleData.find(s => s.driverId === driverId && s.date === dateStr)
-    return entry?.status || 'available'
+  const handleTourAssignment = async (driverId: number, date: string, tourName: string) => {
+    await updateScheduleEntry(driverId, date, { 
+      tourAssigned: tourName,
+      status: 'scheduled'
+    })
   }
 
-  const getDriverTourAssignment = (driverId: number, date: Date): string | undefined => {
-    const dateStr = date.toISOString().split('T')[0]
-    const entry = scheduleData.find(s => s.driverId === driverId && s.date === dateStr)
-    return entry?.tourAssigned
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'available':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-200'
+      case 'scheduled':
+        return 'bg-blue-100 text-blue-800 border-blue-200'
+      case 'holiday':
+        return 'bg-amber-100 text-amber-800 border-amber-200'
+      case 'sick':
+        return 'bg-rose-100 text-rose-800 border-rose-200'
+      case 'unavailable':
+        return 'bg-slate-100 text-slate-800 border-slate-200'
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200'
+    }
   }
 
   const getTourColor = (tourName: string): string => {
     const tour = workingTours.find(t => t.name === tourName)
-    return tour?.color || '#06B6D4' // Default blue color
+    return tour?.color || '#6B7280'
   }
 
-  const handleTourAssignment = async (driverId: number, date: Date, tourName: string) => {
-    const dateStr = date.toISOString().split('T')[0]
-    const currentEntry = scheduleData.find(s => s.driverId === driverId && s.date === dateStr)
-    
-    if (!currentEntry || !['available', 'scheduled'].includes(currentEntry.status)) {
-      toast({
-        title: 'Cannot Assign Tour',
-        description: 'Driver must be available or scheduled to assign a tour',
-        variant: 'destructive'
-      })
-      return
+  // Get week number (ISO week numbering)
+  const getWeekNumber = (date: Date): number => {
+    // Create a copy of the date to avoid modifying the original
+    const target = new Date(date.valueOf())
+    const dayNr = (date.getDay() + 6) % 7 // Make Monday = 0, Sunday = 6
+    target.setDate(target.getDate() - dayNr + 3) // Set to Thursday of the same week
+    const firstThursday = target.valueOf()
+    target.setMonth(0, 1) // January 1st
+    if (target.getDay() !== 4) {
+      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7) // First Thursday of the year
     }
+    return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000) // 604800000 = 7 * 24 * 3600 * 1000
+  }
 
-    // Update local state
-    setScheduleData(prev => {
-      const filtered = prev.filter(s => !(s.driverId === driverId && s.date === dateStr))
-      return [...filtered, { ...currentEntry, tourAssigned: tourName }]
-    })
-
-    // Save to backend
+  // Save schedule data
+  const saveScheduleData = async () => {
     try {
+      // Transform ALL schedule data to match backend format (including 'available' entries)
+      // This ensures that reset schedules are properly saved to the database
+      const scheduleEntries = scheduleData
+        .map(entry => {
+          return {
+            driver_id: entry.driverId, // Use numeric driver ID from our data
+            schedule_date: entry.date,
+            status: entry.status,
+            van_assigned: entry.tourAssigned || null, // Tours are stored in van_assigned field
+            notes: entry.notes || null
+          }
+        })
+        .filter(entry => entry.driver_id) // Only include entries with valid driver_id
+
+      console.log('Saving schedule entries:', scheduleEntries)
+
       const response = await fetch(API_ENDPOINTS.schedulesBulk, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
+        headers: { 
+          'Content-Type': 'application/json' 
         },
-        body: JSON.stringify({
-          entries: [{
-            driver_id: driverId,
-            schedule_date: dateStr,
-            status: currentEntry.status,
-            van_assigned: tourName
-          }]
-        })
+        body: JSON.stringify({ entries: scheduleEntries })
       })
 
       if (!response.ok) {
-        throw new Error('Failed to save tour assignment')
+        const errorData = await response.text()
+        throw new Error(`Failed to save: ${response.status} - ${errorData}`)
       }
 
+      const result = await response.json()
+      console.log('Save result:', result)
+
       toast({
-        title: 'Tour Assigned',
-        description: `${tourName} assigned to driver for ${dateStr}`,
-      })
-    } catch (error) {
-      console.error('Error saving tour assignment:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to save tour assignment',
-        variant: 'destructive'
+        title: "Success",
+        description: `Schedule data saved successfully! (${scheduleEntries.length} entries)`,
       })
       
-      // Revert local state on error
-      setScheduleData(prev => {
-        const filtered = prev.filter(s => !(s.driverId === driverId && s.date === dateStr))
-        return [...filtered, { ...currentEntry, tourAssigned: currentEntry.tourAssigned }]
-      })
-    }
-
-    setEditingCell(null)
-  }
-
-  const toggleDriverStatus = async (driverId: number, date: Date) => {
-    const dateStr = date.toISOString().split('T')[0]
-    const currentStatus = getDriverScheduleStatus(driverId, date)
-    
-    const statusCycle = ['available', 'scheduled', 'holiday', 'sick', 'unavailable']
-    const currentIndex = statusCycle.indexOf(currentStatus)
-    const nextStatus = statusCycle[(currentIndex + 1) % statusCycle.length]
-    
-    // Optimistically update local state
-    setScheduleData(prev => {
-      const filtered = prev.filter(s => !(s.driverId === driverId && s.date === dateStr))
-      return [...filtered, { driverId, date: dateStr, status: nextStatus as any }]
-    })
-
-    // Save to backend
-    try {
-      const response = await fetch(API_ENDPOINTS.schedulesBulk, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          entries: [{
-            driver_id: driverId,
-            schedule_date: dateStr,
-            status: nextStatus
-          }]
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to save schedule')
-      }
     } catch (error) {
       console.error('Error saving schedule:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
       toast({
-        title: 'Error',
-        description: 'Failed to save schedule changes',
-        variant: 'destructive'
-      })
-      
-      // Revert local state on error
-      setScheduleData(prev => {
-        const filtered = prev.filter(s => !(s.driverId === driverId && s.date === dateStr))
-        if (currentStatus !== 'available') {
-          return [...filtered, { driverId, date: dateStr, status: currentStatus as any }]
-        }
-        return filtered
+        title: "Error",
+        description: `Failed to save schedule data: ${errorMessage}`,
+        variant: "destructive"
       })
     }
   }
 
-  const getAbsentDaysCount = (driverId: number): number => {
-    return scheduleData.filter(s => 
-      s.driverId === driverId && 
-      ['holiday', 'sick', 'unavailable'].includes(s.status)
-    ).length
+  // Work Pattern functions
+  const openWorkPatternModal = (driver: Driver) => {
+    setSelectedDriverForPattern(driver)
+    setShowWorkPatternModal(true)
   }
 
-  const getWeekDateRange = () => {
-    if (currentWeekDays.length === 0) return ''
-    const startDate = currentWeekDays[0].date
-    const endDate = currentWeekDays[6].date
+  const saveWorkPattern = async (driverId: number, pattern: WorkPattern) => {
+    try {
+      // Transform pattern to server schema
+      const payload = {
+        driver_id: driverId,
+        type: pattern.type,
+        work_days: pattern.workDays ? JSON.stringify(pattern.workDays) : null,
+        allowed_tours: pattern.allowedTours ? JSON.stringify(pattern.allowedTours) : null,
+        preferred_tour: pattern.preferredTour || null
+      }
+
+      const response = await fetch(API_ENDPOINTS.workPatterns, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to save work pattern: ${response.status}`)
+      }
+
+      // Update local state only if API call succeeds
+      setDrivers(prev => prev.map(driver => 
+        driver.id === driverId 
+          ? { ...driver, workPattern: pattern }
+          : driver
+      ))
+      
+      setShowWorkPatternModal(false)
+      setSelectedDriverForPattern(null)
+      
+      toast({
+        title: "Success",
+        description: "Driver work pattern saved successfully to database!",
+      })
+    } catch (error) {
+      console.error('Error saving work pattern:', error)
+      toast({
+        title: "Error",
+        description: "Failed to save work pattern. Please try again.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const deleteWorkPattern = async (driverId: number) => {
+    try {
+      const res = await fetch(`${API_ENDPOINTS.workPatterns}/driver/${driverId}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete work pattern')
+      setDrivers(prev => prev.map(d => d.id === driverId ? { ...d, workPattern: undefined } : d))
+      setShowWorkPatternModal(false)
+      setSelectedDriverForPattern(null)
+      toast({ title: 'Removed', description: 'Work pattern deleted.' })
+    } catch (e) {
+      toast({ title: 'Error', description: 'Failed to delete work pattern', variant: 'destructive' })
+    }
+  }
+
+  const canDriverWorkOnDay = (driver: Driver, dayName: string): boolean => {
+    if (!driver.workPattern) return true // Default: can work any day
+
+    // Convert short day names to full names for comparison
+    const dayNameMap: {[key: string]: string} = {
+      'mon': 'monday',
+      'tue': 'tuesday', 
+      'wed': 'wednesday',
+      'thu': 'thursday',
+      'fri': 'friday',
+      'sat': 'saturday',
+      'sun': 'sunday'
+    }
     
-    return `${startDate.toLocaleDateString('en-US', { 
-      month: 'long', 
-      day: 'numeric' 
-    })} - ${endDate.toLocaleDateString('en-US', { 
-      month: 'long', 
-      day: 'numeric',
-      year: 'numeric' 
-    })}`
+    const fullDayName = dayNameMap[dayName.toLowerCase()] || dayName.toLowerCase()
+
+    switch (driver.workPattern.type) {
+      case 'monday-friday':
+      case 'monday-friday-mixed':
+        return ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'].includes(fullDayName)
+      case 'custom':
+        return driver.workPattern.workDays?.includes(fullDayName) ?? true
+      default:
+        return true
+    }
   }
 
-  if (loading) {
+  const canDriverWorkTour = (driver: Driver, tourName: string): boolean => {
+    if (!driver.workPattern || !tourName) return true
+
+    switch (driver.workPattern.type) {
+      case 'specific-tour-only':
+        return driver.workPattern.preferredTour === tourName
+      case 'mixed-tours':
+      case 'monday-friday-mixed':
+        return driver.workPattern.allowedTours?.includes(tourName) ?? true
+      default:
+        return true
+    }
+  }
+
+  const getDriverTourOptions = (driver: Driver): string[] => {
+    if (!driver.workPattern) return workingTours.map(t => t.name)
+
+    switch (driver.workPattern.type) {
+      case 'specific-tour-only':
+        return driver.workPattern.preferredTour ? [driver.workPattern.preferredTour] : []
+      case 'mixed-tours':
+      case 'monday-friday-mixed':
+        return driver.workPattern.allowedTours ?? workingTours.map(t => t.name)
+      default:
+        return workingTours.map(t => t.name)
+    }
+  }
+
+  // Schedule reset function
+  const resetSchedule = () => {
+    setShowResetConfirm(true)
+  }
+
+  const confirmResetSchedule = async () => {
+    const resetSchedule: ScheduleEntry[] = []
+    const activeDrivers = drivers.filter(d => d.status === 'Active')
+    
+    currentWeekDays.forEach(day => {
+      activeDrivers.forEach(driver => {
+        resetSchedule.push({
+          driverId: driver.id,
+          date: day.date.toISOString().split('T')[0],
+          status: 'available',
+          tourAssigned: undefined,
+          notes: ''
+        })
+      })
+    })
+    
+    // Update local state immediately
+    setScheduleData(resetSchedule)
+    setShowResetConfirm(false)
+
+    // Save to database
+    try {
+      const scheduleEntries = resetSchedule.map(entry => ({
+        driver_id: entry.driverId,
+        schedule_date: entry.date,
+        status: entry.status,
+        van_assigned: entry.tourAssigned || null,
+        notes: entry.notes || null
+      }))
+
+      const response = await fetch(API_ENDPOINTS.schedulesBulk, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries: scheduleEntries })
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to save reset schedule: ${response.status}`)
+      }
+
+      toast({
+        title: "Schedule Reset",
+        description: "All schedule assignments have been cleared and saved to database",
+      })
+    } catch (error) {
+      console.error('Error saving reset schedule:', error)
+      toast({
+        title: "Warning", 
+        description: "Schedule reset locally but may not be saved to database",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Export/Import functions
+  const exportSchedule = () => {
+    try {
+      const exportData = {
+        metadata: {
+          exportDate: new Date().toISOString(),
+          weekStart: currentWeekDays[0]?.date.toISOString().split('T')[0],
+          weekEnd: currentWeekDays[5]?.date.toISOString().split('T')[0],
+          totalEntries: scheduleData.length,
+          driversCount: drivers.length
+        },
+        drivers: drivers.map(driver => ({
+          id: driver.id,
+          name: driver.name,
+          workPattern: driver.workPattern
+        })),
+        schedule: scheduleData.map(entry => ({
+          driverId: entry.driverId,
+          date: entry.date,
+          status: entry.status,
+          tourAssigned: entry.tourAssigned,
+          notes: entry.notes
+        })),
+        tours: workingTours.map(tour => ({
+          id: tour.id,
+          name: tour.name,
+          color: tour.color
+        }))
+      }
+
+      const dataStr = JSON.stringify(exportData, null, 2)
+      const dataBlob = new Blob([dataStr], { type: 'application/json' })
+      const url = URL.createObjectURL(dataBlob)
+      
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `schedule-export-${exportData.metadata.weekStart}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+
+      toast({
+        title: "Export Complete",
+        description: `Schedule exported successfully for week ${exportData.metadata.weekStart}`,
+      })
+    } catch (error) {
+      console.error('Export error:', error)
+      toast({
+        title: "Export Failed",
+        description: "Failed to export schedule data",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const getHolidayRequests = async (startDate: string, endDate: string) => {
+    try {
+      const response = await fetch(`${API_ENDPOINTS.holidayRequests}?start_date=${startDate}&end_date=${endDate}`)
+      if (response.ok) {
+        const holidays = await response.json()
+        return holidays.filter((h: any) => h.status === 'approved')
+      }
+    } catch (error) {
+      console.warn('Could not fetch holiday requests:', error)
+    }
+    return []
+  }
+
+  const importSchedule = async () => {
+    try {
+      const parsedData = JSON.parse(importData)
+      
+      if (!parsedData.schedule || !parsedData.drivers) {
+        throw new Error('Invalid schedule format')
+      }
+
+      // Calculate target week dates
+      const targetWeekStart = new Date(currentWeekDays[0].date)
+      targetWeekStart.setDate(targetWeekStart.getDate() + (importWeekOffset * 7))
+      
+      const targetWeekDays: string[] = []
+      for (let i = 0; i < 6; i++) {
+        const day = new Date(targetWeekStart)
+        day.setDate(targetWeekStart.getDate() + i)
+        targetWeekDays.push(day.toISOString().split('T')[0])
+      }
+
+      // Get approved holiday requests for target week
+      const approvedHolidays = await getHolidayRequests(targetWeekDays[0], targetWeekDays[5])
+      
+      // Create mapping of driver holidays
+      const driverHolidays = new Map()
+      approvedHolidays.forEach((holiday: any) => {
+        const holidayStart = new Date(holiday.start_date)
+        const holidayEnd = new Date(holiday.end_date)
+        
+        targetWeekDays.forEach(dateStr => {
+          const checkDate = new Date(dateStr)
+          if (checkDate >= holidayStart && checkDate <= holidayEnd) {
+            if (!driverHolidays.has(holiday.driver_id)) {
+              driverHolidays.set(holiday.driver_id, [])
+            }
+            driverHolidays.get(holiday.driver_id).push(dateStr)
+          }
+        })
+      })
+
+      // Transform imported schedule to target week with holiday integration
+      const newSchedule: ScheduleEntry[] = []
+      
+      parsedData.schedule.forEach((entry: any) => {
+        const originalDate = new Date(entry.date)
+        const dayOfWeek = originalDate.getDay()
+        const mondayBasedIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // Convert Sunday=0 to Saturday=6
+        
+        if (mondayBasedIndex < 6) { // Only Monday-Saturday
+          const targetDate = targetWeekDays[mondayBasedIndex]
+          const driverHolidayDates = driverHolidays.get(entry.driverId) || []
+          
+          // Check if driver has approved holiday on this date
+          const isOnHoliday = driverHolidayDates.includes(targetDate)
+          
+          newSchedule.push({
+            driverId: entry.driverId,
+            date: targetDate,
+            status: isOnHoliday ? 'holiday' : entry.status,
+            tourAssigned: isOnHoliday ? undefined : entry.tourAssigned,
+            notes: isOnHoliday 
+              ? `Holiday (imported from approved request)` 
+              : `Imported: ${entry.notes || ''}`
+          })
+        }
+      })
+
+      // Update local state
+      setScheduleData(newSchedule)
+      
+      // Save to database
+      const saved = await saveScheduleToDatabase(newSchedule, "import")
+      
+      if (saved) {
+        toast({
+          title: "Import Complete",
+          description: `Schedule imported for week starting ${targetWeekDays[0]} with ${approvedHolidays.length} holiday(s) applied`,
+        })
+      }
+      
+      setShowImportModal(false)
+      setImportData('')
+      
+    } catch (error) {
+      console.error('Import error:', error)
+      toast({
+        title: "Import Failed",
+        description: "Failed to import schedule. Please check the file format.",
+        variant: "destructive"
+      })
+    }
+  }
+
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="relative">
-            <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-            <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-r-purple-600 rounded-full animate-spin animation-delay-150 mx-auto"></div>
-          </div>
-          <h2 className="mt-4 text-xl font-semibold text-slate-700">Loading Schedule Planner</h2>
-          <p className="mt-2 text-slate-500">Preparing your driver scheduling interface...</p>
+          <Clock className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-slate-600">Loading schedule...</p>
         </div>
       </div>
     )
@@ -410,610 +982,722 @@ export default function SchedulePlannerPage() {
 
   return (
     <>
-      <style>
-        {quarters.map((_, qIndex) => {
-          const quarterProgress = Math.floor(Math.random() * 100)
-          return `
-            .quarter-progress-${qIndex} {
-              width: ${quarterProgress}%;
-            }
-          `
-        }).join('')}
-        {workingTours.map((tour) => `
-          .tour-display[data-tour-color="${tour.color}"] {
-            border-color: ${tour.color};
-            background-color: ${tour.color}08;
-          }
-          .tour-icon[data-tour-color="${tour.color}"] {
-            color: ${tour.color};
-          }
-          .tour-text[data-tour-color="${tour.color}"] {
-            color: ${tour.color};
-          }
-        `).join('')}
-      </style>
-      <div className="space-y-6 p-6 bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
-      {/* Enhanced Header */}
-      <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Calendar className="h-6 w-6 text-blue-600" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900">Driver Schedule Planner</h1>
-                <p className="text-slate-600">
-                  Plan your drivers' weekly schedules from Week 1 to Week 52.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 text-sm text-slate-500">
-              <span className="flex items-center gap-1">
-                <Users2 className="h-4 w-4" />
-                {drivers.length} Active Drivers
-              </span>
-              <span className="flex items-center gap-1">
-                <CalendarDays className="h-4 w-4" />
-                Week {selectedWeek} of {selectedYear}
-              </span>
-              <Badge variant="outline" className="text-xs">
-                User ID: 16585831783359119148
-              </Badge>
-            </div>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-slate-900">Schedule Planner</h1>
+            <p className="text-slate-600 mt-1">Manage driver schedules and tour assignments</p>
           </div>
           
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Year and Week Navigation */}
-            <div className="flex items-center gap-2 bg-slate-50 rounded-lg p-1">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setSelectedWeek(Math.max(1, selectedWeek - 1))}
-                className="h-8 w-8 p-0"
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 p-1">
+              <button
+                onClick={() => setView('week')}
+                className={cn(
+                  "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  view === 'week' 
+                    ? "bg-blue-100 text-blue-700" 
+                    : "text-slate-600 hover:text-slate-900"
+                )}
               >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                className="px-3 py-1.5 bg-white border border-slate-200 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                title="Select Year"
-                aria-label="Select Year"
+                Week
+              </button>
+              <button
+                onClick={() => setView('month')}
+                className={cn(
+                  "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  view === 'month' 
+                    ? "bg-blue-100 text-blue-700" 
+                    : "text-slate-600 hover:text-slate-900"
+                )}
               >
-                {[2024, 2025, 2026].map(year => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-              
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setSelectedWeek(Math.min(52, selectedWeek + 1))}
-                className="h-8 w-8 p-0"
+                Month
+              </button>
+              <button
+                onClick={() => setView('quarter')}
+                className={cn(
+                  "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
+                  view === 'quarter' 
+                    ? "bg-blue-100 text-blue-700" 
+                    : "text-slate-600 hover:text-slate-900"
+                )}
               >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+                Quarter
+              </button>
             </div>
             
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="border-slate-200">
-                <Save className="h-4 w-4 mr-1" />
-                Save Changes
-              </Button>
-              
-              <Button size="sm" variant="outline" className="border-slate-200">
-                <Download className="h-4 w-4 mr-1" />
-                Export
-              </Button>
-              
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 shadow-sm">
-                <Plus className="h-4 w-4 mr-1" />
-                Quick Actions
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Modern Year Overview with Enhanced Design */}
-      <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-        {/* Sophisticated Header */}
-        <div className="relative">
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600"></div>
-          <div className="absolute inset-0 bg-black/20"></div>
-          <div className="relative p-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl border border-white/30">
-                  <CalendarDays className="h-8 w-8 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-3xl font-bold text-white mb-1">{selectedYear} Year Overview</h2>
-                  <p className="text-white/80 text-lg">Navigate through quarters and plan your year</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <Badge className="bg-white/20 backdrop-blur-sm text-white border-white/30 px-4 py-2 text-sm">
-                  Current: Week {selectedWeek}
-                </Badge>
-                <div className="flex items-center gap-1 bg-white/10 backdrop-blur-sm rounded-lg p-2">
-                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                  <span className="text-white text-sm font-medium">Live</span>
-                </div>
-              </div>
-            </div>
+            <Button variant="outline" size="sm" onClick={exportSchedule}>
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            
+            <Button variant="outline" size="sm" onClick={() => setShowImportModal(true)}>
+              <Upload className="h-4 w-4 mr-2" />
+              Import
+            </Button>
+            
+            <Button 
+              size="sm"
+              onClick={saveScheduleData}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save Changes
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={resetSchedule}
+              className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Reset Schedule
+            </Button>
           </div>
         </div>
 
-        {/* Enhanced Quarter Panels */}
-        <div className="p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
-            {quarters.map((quarter, qIndex) => {
-              const quarterProgress = Math.floor(Math.random() * 100) // You can replace with actual progress calculation
-              const isCurrentQuarter = selectedWeek >= (qIndex * 13 + 1) && selectedWeek <= ((qIndex + 1) * 13)
-              
-              return (
-                <div 
-                  key={quarter.name} 
-                  className={cn(
-                    "group relative overflow-hidden rounded-2xl transition-all duration-300 hover:scale-105",
-                    "bg-gradient-to-br shadow-lg hover:shadow-2xl border-2",
-                    quarter.name === 'Q1' && "from-blue-50 to-blue-100 border-blue-200 hover:from-blue-100 hover:to-blue-200",
-                    quarter.name === 'Q2' && "from-emerald-50 to-emerald-100 border-emerald-200 hover:from-emerald-100 hover:to-emerald-200",
-                    quarter.name === 'Q3' && "from-amber-50 to-amber-100 border-amber-200 hover:from-amber-100 hover:to-amber-200",
-                    quarter.name === 'Q4' && "from-purple-50 to-purple-100 border-purple-200 hover:from-purple-100 hover:to-purple-200",
-                    isCurrentQuarter && "ring-4 ring-offset-2 ring-indigo-500/50"
-                  )}
-                >
-                  {/* Quarter Header */}
-                  <div className="p-6 border-b border-white/50">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          "w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl text-white shadow-lg",
-                          quarter.name === 'Q1' && "bg-blue-500",
-                          quarter.name === 'Q2' && "bg-emerald-500", 
-                          quarter.name === 'Q3' && "bg-amber-500",
-                          quarter.name === 'Q4' && "bg-purple-500"
-                        )}>
-                          {quarter.name}
+        {/* Week View */}
+        {view === 'week' && (
+          <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+            {/* Week Navigation */}
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigateWeek('prev')}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigateWeek('next')}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  
+                  <div className="text-lg font-semibold text-slate-900">
+                    Week {getWeekNumber(currentWeek)} - {currentWeekDays[0]?.shortDate} to {currentWeekDays[5]?.shortDate}
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <Users2 className="h-4 w-4" />
+                  <span>{drivers.length} drivers</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Schedule Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full table-fixed">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50">
+                    <th className="w-48 p-3 text-left font-medium text-slate-700 border-r border-slate-200">
+                      Driver
+                    </th>
+                    {currentWeekDays.map((day, index) => (
+                      <th 
+                        key={index} 
+                        className={cn(
+                          "w-32 p-3 text-center font-medium border-r border-slate-200",
+                          day.isToday ? "bg-blue-50 text-blue-700" : "text-slate-700",
+                          day.isWeekend ? "bg-slate-100" : ""
+                        )}
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-sm">{day.dayName}</span>
+                          <span className="text-xs text-slate-500">{day.shortDate}</span>
                         </div>
-                        <div>
-                          <h3 className="font-bold text-xl text-slate-800">{quarter.name} 2025</h3>
-                          <p className="text-slate-600 text-sm">Quarter {qIndex + 1}</p>
-                        </div>
-                      </div>
-                      {isCurrentQuarter && (
-                        <Badge className="bg-indigo-500 text-white px-3 py-1 animate-pulse">
-                          Active
-                        </Badge>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {drivers.map((driver, driverIndex) => (
+                    <tr 
+                      key={driver.id} 
+                      className={cn(
+                        "border-b border-slate-100",
+                        driverIndex % 2 === 0 ? "bg-white" : "bg-slate-50"
                       )}
-                    </div>
-                    
-                    {/* Progress Bar */}
-                    <div className="mb-4">
-                      <div className="flex justify-between text-xs text-slate-600 mb-1">
-                        <span>Progress</span>
-                        <span>{quarterProgress}%</span>
-                      </div>
-                      <div className="w-full bg-white/60 rounded-full h-2 overflow-hidden">
-                        <div 
-                          className={cn(
-                            `quarter-progress-${qIndex}`,
-                            "h-full rounded-full transition-all duration-1000 shadow-sm",
-                            quarter.name === 'Q1' && "bg-gradient-to-r from-blue-400 to-blue-600",
-                            quarter.name === 'Q2' && "bg-gradient-to-r from-emerald-400 to-emerald-600",
-                            quarter.name === 'Q3' && "bg-gradient-to-r from-amber-400 to-amber-600",
-                            quarter.name === 'Q4' && "bg-gradient-to-r from-purple-400 to-purple-600"
-                          )}
-                        ></div>
-                      </div>
-                    </div>
-
-                    {/* Month Stats */}
-                    <div className="grid grid-cols-3 gap-2 mb-4">
-                      {quarter.months.map((month) => (
-                        <div key={month} className="text-center">
-                          <div className="text-xs font-medium text-slate-600 mb-1">
-                            {month.slice(0, 3)}
+                    >
+                      <td className="p-3 border-r border-slate-200">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                            <User className="h-4 w-4 text-blue-600" />
                           </div>
-                          <div className={cn(
-                            "w-8 h-8 mx-auto rounded-lg flex items-center justify-center text-xs font-bold text-white",
-                            quarter.name === 'Q1' && "bg-blue-400",
-                            quarter.name === 'Q2' && "bg-emerald-400",
-                            quarter.name === 'Q3' && "bg-amber-400", 
-                            quarter.name === 'Q4' && "bg-purple-400"
-                          )}>
-                            {Math.floor(Math.random() * 30) + 1}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Enhanced Month/Week Navigation */}
-                  <div className="p-6 space-y-4">
-                    {quarter.months.map((month, mIndex) => {
-                      const monthData = monthsData[qIndex * 3 + mIndex]
-                      const isCurrentMonth = new Date().getMonth() === (qIndex * 3 + mIndex)
-                      
-                      return (
-                        <div key={month} className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <h4 className={cn(
-                              "font-semibold text-sm",
-                              isCurrentMonth ? "text-indigo-700" : "text-slate-700"
-                            )}>
-                              {month}
-                              {isCurrentMonth && (
-                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                                  Current
+                          <div className="flex-1 min-w-0">
+                            <div 
+                              className="font-medium text-slate-900 truncate" 
+                              title={driver.name}
+                            >
+                              {driver.name}
+                            </div>
+                            <div className="text-xs text-slate-500">{driver.driver_id}</div>
+                            {!driver.workPattern ? (
+                              <div className="mt-1">
+                                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+                                  <AlertCircle className="w-3 h-3 mr-1" />
+                                  No Pattern Set
                                 </span>
-                              )}
-                            </h4>
-                            <Badge variant="outline" className="text-xs">
-                              {monthData?.weeks.length || 0}W
-                            </Badge>
-                          </div>
-                          
-                          {/* Week Grid with Enhanced Design */}
-                          <div className="grid grid-cols-4 gap-2">
-                            {monthData?.weeks.map(week => {
-                              const weekNum = parseInt(week.substring(1))
-                              const isSelected = selectedWeek === weekNum
-                              
-                              return (
-                                <button
-                                  key={week}
-                                  onClick={() => setSelectedWeek(weekNum)}
-                                  className={cn(
-                                    "relative p-2 text-xs font-medium rounded-lg transition-all duration-200 border-2",
-                                    "hover:scale-110 hover:shadow-lg transform",
-                                    isSelected ? [
-                                      "bg-gradient-to-br from-indigo-500 to-indigo-600 text-white border-indigo-300",
-                                      "shadow-lg scale-110 ring-2 ring-indigo-200"
-                                    ] : [
-                                      "bg-white/60 hover:bg-white border-slate-200 text-slate-700",
-                                      "hover:border-indigo-300 hover:text-indigo-700"
-                                    ]
-                                  )}
-                                >
-                                  {week}
-                                  {isSelected && (
-                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-indigo-400 rounded-full border-2 border-white"></div>
-                                  )}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {/* Quarter Summary Footer */}
-                  <div className={cn(
-                    "px-6 py-4 border-t border-white/50",
-                    quarter.name === 'Q1' && "bg-blue-50/50",
-                    quarter.name === 'Q2' && "bg-emerald-50/50",
-                    quarter.name === 'Q3' && "bg-amber-50/50",
-                    quarter.name === 'Q4' && "bg-purple-50/50"
-                  )}>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-600">Weeks {(qIndex * 13) + 1}-{(qIndex + 1) * 13}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                          <span className="text-slate-600">Scheduled</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-                          <span className="text-slate-600">Pending</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Hover Effect Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/0 to-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-2xl"></div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Year Summary Statistics */}
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 border border-blue-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500 rounded-lg">
-                  <CalendarDays className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-blue-600 text-sm font-medium">Total Weeks</p>
-                  <p className="text-2xl font-bold text-blue-800">52</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-6 border border-emerald-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-500 rounded-lg">
-                  <Users2 className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-emerald-600 text-sm font-medium">Active Drivers</p>
-                  <p className="text-2xl font-bold text-emerald-800">{drivers.length}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-6 border border-amber-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-500 rounded-lg">
-                  <Clock className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-amber-600 text-sm font-medium">Current Week</p>
-                  <p className="text-2xl font-bold text-amber-800">{selectedWeek}</p>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 border border-purple-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-500 rounded-lg">
-                  <CheckCircle className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-purple-600 text-sm font-medium">Completion</p>
-                  <p className="text-2xl font-bold text-purple-800">{Math.floor((selectedWeek / 52) * 100)}%</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Modern & Simple Weekly Schedule */}
-      <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-        {/* Clean Header */}
-        <div className="bg-gradient-to-r from-slate-900 to-slate-700 p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-                <Calendar className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold text-white">Week {selectedWeek} Schedule</h2>
-                <p className="text-slate-300 text-sm">{getWeekDateRange()}</p>
-              </div>
-            </div>
-            <Badge className="bg-white/20 text-white border-white/20 px-4 py-2">
-              {drivers.length} Drivers
-            </Badge>
-          </div>
-        </div>
-
-        {/* Simplified Schedule Grid */}
-        <div className="overflow-x-auto">
-          <div className="min-w-full">
-            {/* Header Row */}
-            <div className="grid grid-cols-[250px_repeat(7,1fr)_120px] bg-slate-50 border-b border-slate-200">
-              <div className="p-4 font-semibold text-slate-700 flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Driver
-              </div>
-              {currentWeekDays.map((day) => (
-                <div 
-                  key={day.date.toISOString()} 
-                  className={cn(
-                    "p-4 text-center font-medium",
-                    day.isToday ? "bg-blue-50 text-blue-700 border-l-2 border-r-2 border-blue-500" : "text-slate-600",
-                    day.isWeekend && "bg-slate-100 text-slate-500"
-                  )}
-                >
-                  <div className="flex flex-col items-center gap-1">
-                    <span className="text-sm font-semibold">{day.dayName}</span>
-                    <span className="text-xs opacity-70">{day.shortDate}</span>
-                    {day.isToday && (
-                      <div className="w-2 h-2 bg-blue-500 rounded-full mt-1"></div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              <div className="p-4 text-center font-medium text-slate-600">
-                <div className="flex flex-col items-center gap-1">
-                  <AlertTriangle className="h-4 w-4" />
-                  <span className="text-xs">Absent</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Driver Rows */}
-            <div className="divide-y divide-slate-100">
-              {drivers.map((driver, index) => (
-                <div key={driver.id} className={cn(
-                  "grid grid-cols-[250px_repeat(7,1fr)_120px] hover:bg-slate-50/50 transition-colors",
-                  index % 2 === 0 ? "bg-white" : "bg-slate-25"
-                )}>
-                  {/* Driver Info */}
-                  <div className="p-4 border-r border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-slate-600 to-slate-800 rounded-xl flex items-center justify-center text-white font-bold text-sm">
-                        {driver.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-slate-900 truncate">{driver.name}</div>
-                        <div className="text-xs text-slate-500">ID: {driver.driver_id}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Day Schedule Cells */}
-                  {currentWeekDays.map((day) => {
-                    const status = getDriverScheduleStatus(driver.id, day.date)
-                    const tourAssigned = getDriverTourAssignment(driver.id, day.date)
-                    const isEditing = editingCell?.driverId === driver.id && editingCell?.date === day.date.toISOString().split('T')[0]
-                    
-                    return (
-                      <div key={day.date.toISOString()} className={cn(
-                        "p-3 border-r border-slate-100 flex items-center justify-center min-h-[80px]",
-                        day.isToday && "bg-blue-50/50"
-                      )}>
-                        {isEditing && (status === 'available' || status === 'scheduled') ? (
-                          // Simple Tour Selection
-                          <div className="relative w-full">
-                            <select 
-                              className="w-full text-xs border border-slate-300 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                              value={tourAssigned || ''}
-                              onChange={(e) => handleTourAssignment(driver.id, day.date, e.target.value)}
-                              title="Select tour assignment"
-                              aria-label="Select tour assignment"
-                              autoFocus
-                            >
-                              <option value="">No Tour</option>
-                              {workingTours.map((tour) => (
-                                <option key={tour.id} value={tour.name}>
-                                  {tour.name}
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              onClick={() => setEditingCell(null)}
-                              className="absolute -top-1 -right-1 w-4 h-4 bg-slate-600 text-white rounded-full text-xs flex items-center justify-center hover:bg-slate-700"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center gap-2">
-                            {tourAssigned ? (
-                              // Clean Tour Display
-                              <div 
-                                className="px-3 py-2 rounded-lg border-2 cursor-pointer transition-all hover:scale-105 hover:shadow-md bg-white tour-display"
-                                data-tour-color={getTourColor(tourAssigned)}
-                                onClick={() => toggleDriverStatus(driver.id, day.date)}
-                                onContextMenu={(e) => {
-                                  e.preventDefault()
-                                  setEditingCell({driverId: driver.id, date: day.date.toISOString().split('T')[0]})
-                                }}
-                                title={`${status} - ${tourAssigned}`}
-                              >
-                                <div className="flex flex-col items-center gap-1">
-                                  <Truck className="h-4 w-4 tour-icon" data-tour-color={getTourColor(tourAssigned)} />
-                                  <span 
-                                    className="text-xs font-medium text-center tour-text"
-                                    data-tour-color={getTourColor(tourAssigned)}
-                                  >
-                                    {tourAssigned.length > 12 ? tourAssigned.substring(0, 12) + '...' : tourAssigned}
-                                  </span>
-                                </div>
                               </div>
                             ) : (
-                              // Clean Status Button
-                              <button
-                                onClick={() => toggleDriverStatus(driver.id, day.date)}
-                                onContextMenu={(e) => {
-                                  e.preventDefault()
-                                  if (status === 'available' || status === 'scheduled') {
-                                    setEditingCell({driverId: driver.id, date: day.date.toISOString().split('T')[0]})
-                                  }
-                                }}
-                                className={cn(
-                                  "w-12 h-12 rounded-xl flex items-center justify-center transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2",
-                                  status === 'available' && "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 focus:ring-emerald-500",
-                                  status === 'scheduled' && "bg-blue-100 text-blue-700 hover:bg-blue-200 focus:ring-blue-500",
-                                  status === 'holiday' && "bg-amber-100 text-amber-700 hover:bg-amber-200 focus:ring-amber-500",
-                                  status === 'sick' && "bg-rose-100 text-rose-700 hover:bg-rose-200 focus:ring-rose-500",
-                                  status === 'unavailable' && "bg-slate-100 text-slate-700 hover:bg-slate-200 focus:ring-slate-500"
-                                )}
-                                title={status.charAt(0).toUpperCase() + status.slice(1)}
-                              >
-                                {getStatusIcon(status)}
-                              </button>
+                              <div className="text-xs text-blue-600 mt-1">
+                                {driver.workPattern.type === 'monday-friday' && 'Mon-Fri (Any Tour)'}
+                                {driver.workPattern.type === 'monday-friday-mixed' && 'Mon-Fri (Specific Tours)'}
+                                {driver.workPattern.type === 'specific-tour-only' && `${driver.workPattern.preferredTour}`}
+                                {driver.workPattern.type === 'mixed-tours' && 'Mixed Tours (Any Day)'}
+                                {driver.workPattern.type === 'custom' && 'Custom Schedule'}
+                              </div>
                             )}
                           </div>
-                        )}
-                      </div>
+                          <button
+                            onClick={() => openWorkPatternModal(driver)}
+                            className="p-1.5 hover:bg-slate-100 rounded-md transition-colors"
+                            title="Configure work pattern"
+                          >
+                            <Settings className="h-4 w-4 text-slate-500" />
+                          </button>
+                        </div>
+                      </td>
+                      
+                      {currentWeekDays.map((day, dayIndex) => {
+                        const dateStr = day.date.toISOString().split('T')[0]
+                        const entry = getScheduleEntry(driver.id, dateStr)
+                        const canWork = canDriverWorkOnDay(driver, day.dayName)
+                        
+                        // Debug log for first few entries
+                        if (driverIndex < 3 && dayIndex < 3) {
+                          console.log(`DEBUG: Driver ${driver.name} (${driver.id}) on ${dateStr}:`, {
+                            entry,
+                            tourAssigned: entry?.tourAssigned,
+                            status: entry?.status
+                          })
+                        }
+                        
+                        return (
+                          <td 
+                            key={dayIndex} 
+                            className={cn(
+                              "p-2 border-r border-slate-200 relative",
+                              day.isWeekend ? "bg-slate-50" : "",
+                              !canWork ? "bg-red-50" : ""
+                            )}
+                          >
+                            <div className="space-y-2">
+                              {/* Status Badge */}
+                              <button
+                                onClick={() => canWork && handleStatusClick(driver.id, dateStr)}
+                                disabled={!canWork}
+                                className={cn(
+                                  "w-full px-2 py-1 rounded-md text-xs font-medium border transition-colors hover:shadow-sm",
+                                  getStatusBadgeClass(entry?.status || 'available'),
+                                  !canWork && "opacity-50 cursor-not-allowed bg-red-100 border-red-200"
+                                )}
+                              >
+                                <div className="flex items-center justify-center gap-1">
+                                  {getStatusIcon(entry?.status || 'available')}
+                                  <span className="truncate">
+                                    {!canWork ? 'Not Available' : 
+                                     (entry?.status || 'available').charAt(0).toUpperCase() + 
+                                     (entry?.status || 'available').slice(1)}
+                                  </span>
+                                </div>
+                              </button>
+                              
+                              {/* Tour Assignment */}
+                              {(entry?.status === 'scheduled' || entry?.status === 'available') && canWork ? (
+                                <div className="space-y-1">
+                                  <select
+                                    value={entry?.tourAssigned || ''}
+                                    onChange={(e) => handleTourAssignment(driver.id, dateStr, e.target.value)}
+                                    className="w-full text-xs p-1 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    title="Select tour assignment"
+                                    aria-label="Tour assignment"
+                                    disabled={!canWork}
+                                  >
+                                    <option value="">Select Tour</option>
+                                    {getDriverTourOptions(driver)
+                                      .filter(tourName => canDriverWorkTour(driver, tourName))
+                                      .map(tourName => {
+                                        const tour = workingTours.find(t => t.name === tourName)
+                                        return tour ? (
+                                          <option key={tour.id} value={tour.name}>
+                                            {tour.name}
+                                          </option>
+                                        ) : null
+                                      })}
+                                  </select>
+                                  
+                                  {entry?.tourAssigned && (
+                                    <div
+                                      className="text-xs px-2 py-1 rounded text-white text-center truncate tour-assignment-badge"
+                                      data-color={getTourColor(entry.tourAssigned)}
+                                      title={entry.tourAssigned}
+                                    >
+                                      {entry.tourAssigned.length > 15 
+                                        ? `${entry.tourAssigned.substring(0, 15)}...` 
+                                        : entry.tourAssigned
+                                      }
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Weekly Analytics Summary */}
+        <div className="bg-white rounded-lg border border-slate-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-900 mb-4">Weekly Tour Summary</h3>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b-2 border-slate-300">
+                  <th className="p-3 text-left font-bold text-slate-700 border-r border-slate-200 bg-slate-50">Tour Type</th>
+                  {currentWeekDays.map((day, index) => (
+                    <th key={index} className="p-3 text-center font-bold text-slate-700 border-r border-slate-200 bg-slate-50 min-w-[80px]">
+                      {day.dayName}<br />
+                      <span className="text-xs text-slate-500 font-normal">{day.shortDate}</span>
+                    </th>
+                  ))}
+                  <th className="p-3 text-center font-bold text-slate-700 bg-slate-50">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Next Day Cycle Tours */}
+                {workingTours
+                  .filter(tour => tour.name.toLowerCase().includes('next day') || tour.name.toLowerCase().includes('fc next'))
+                  .map(tour => {
+                    const dailyCounts = currentWeekDays.map(day => {
+                      const dateStr = day.date.toISOString().split('T')[0]
+                      return scheduleData.filter(s => s.date === dateStr && s.tourAssigned === tour.name).length
+                    })
+                    const weekTotal = dailyCounts.reduce((sum, count) => sum + count, 0)
+                    
+                    return (
+                      <tr key={tour.id} className="border-b border-slate-100 hover:bg-slate-25">
+                        <td className="p-3 font-medium text-slate-900 border-r border-slate-200">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full tour-color-dot"
+                              data-color={tour.color}
+                              data-color-set="true"
+                            />
+                            <span className="truncate" title={tour.name}>
+                              {tour.name}
+                            </span>
+                          </div>
+                        </td>
+                        {dailyCounts.map((count, index) => (
+                          <td key={index} className="p-3 text-center border-r border-slate-200">
+                            <span className={cn(
+                              "font-medium",
+                              count > 0 ? "text-slate-900" : "text-slate-400"
+                            )}>
+                              {count}
+                            </span>
+                          </td>
+                        ))}
+                        <td className="p-3 text-center">
+                          <span className="font-bold text-slate-900">
+                            {weekTotal}
+                          </span>
+                        </td>
+                      </tr>
                     )
                   })}
 
-                  {/* Absent Days Count */}
-                  <div className="p-4 flex items-center justify-center">
-                    <div className={cn(
-                      "w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm",
-                      getAbsentDaysCount(driver.id) > 3 
-                        ? "bg-rose-100 text-rose-700" 
-                        : "bg-emerald-100 text-emerald-700"
-                    )}>
-                      {getAbsentDaysCount(driver.id)}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                {/* Same Day Tours */}
+                {workingTours
+                  .filter(tour => tour.name.toLowerCase().includes('same day') || tour.name.toLowerCase().includes('fc same'))
+                  .map(tour => {
+                    const dailyCounts = currentWeekDays.map(day => {
+                      const dateStr = day.date.toISOString().split('T')[0]
+                      return scheduleData.filter(s => s.date === dateStr && s.tourAssigned === tour.name).length
+                    })
+                    const weekTotal = dailyCounts.reduce((sum, count) => sum + count, 0)
+                    
+                    return (
+                      <tr key={tour.id} className="border-b border-slate-100 hover:bg-slate-25">
+                        <td className="p-3 font-medium text-slate-900 border-r border-slate-200">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full tour-color-dot"
+                              data-color={tour.color}
+                              data-color-set="true"
+                            />
+                            <span className="truncate" title={tour.name}>
+                              {tour.name}
+                            </span>
+                          </div>
+                        </td>
+                        {dailyCounts.map((count, index) => (
+                          <td key={index} className="p-3 text-center border-r border-slate-200">
+                            <span className={cn(
+                              "font-medium",
+                              count > 0 ? "text-slate-900" : "text-slate-400"
+                            )}>
+                              {count}
+                            </span>
+                          </td>
+                        ))}
+                        <td className="p-3 text-center">
+                          <span className="font-bold text-slate-900">
+                            {weekTotal}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+
+                {/* Spacer Row */}
+                <tr className="border-b border-slate-200">
+                  <td colSpan={8} className="h-2"></td>
+                </tr>
+
+                {/* Total Next Day Cycle */}
+                {(() => {
+                  const nextDayDailyCounts = currentWeekDays.map(day => {
+                    const dateStr = day.date.toISOString().split('T')[0]
+                    return scheduleData.filter(s => {
+                      if (s.date !== dateStr || !s.tourAssigned) return false
+                      const tourName = s.tourAssigned.toLowerCase()
+                      // Count Next Day tours: Standard Parcel tours, Cycle 1, etc.
+                      return tourName.includes('next day') || 
+                             tourName.includes('cycle 1') ||
+                             tourName.includes('standard parcel - diesel') ||
+                             tourName.includes('standard parcel - evan') ||
+                             tourName.includes('standard parcel medium - diesel') ||
+                             tourName.includes('fc next')
+                    }).length
+                  })
+                  const nextDayWeekTotal = nextDayDailyCounts.reduce((sum, count) => sum + count, 0)
+                  
+                  return (
+                    <tr className="border-b border-slate-200 bg-green-50">
+                      <td className="p-3 font-bold text-slate-900 border-r border-slate-200">Total Next Day Cycle</td>
+                      {nextDayDailyCounts.map((count, index) => (
+                        <td key={index} className="p-3 text-center border-r border-slate-200 bg-green-100">
+                          <span className="font-bold text-slate-900">
+                            {count}
+                          </span>
+                        </td>
+                      ))}
+                      <td className="p-3 text-center bg-green-100">
+                        <span className="font-bold text-slate-900">
+                          {nextDayWeekTotal}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })()}
+
+                {/* Total Same Day A */}
+                {(() => {
+                  const sameDayADailyCounts = currentWeekDays.map(day => {
+                    const dateStr = day.date.toISOString().split('T')[0]
+                    return scheduleData.filter(s => {
+                      if (s.date !== dateStr || !s.tourAssigned) return false
+                      const tourName = s.tourAssigned.toLowerCase()
+                      // Count Cycle A, Cycle A/B, and Cycle A/C
+                      return (tourName.includes('cycle a') && !tourName.includes('cycle a/c') && !tourName.includes('cycle a/b')) ||
+                             tourName.includes('cycle a/b') ||
+                             tourName.includes('cycle a/c') ||
+                             (tourName.includes('same day a') && !tourName.includes('same day a/c') && !tourName.includes('same day a/b'))
+                    }).length
+                  })
+                  const sameDayAWeekTotal = sameDayADailyCounts.reduce((sum, count) => sum + count, 0)
+                  
+                  return (
+                    <tr className="border-b border-slate-200 bg-green-50">
+                      <td className="p-3 font-bold text-slate-900 border-r border-slate-200">Total Same Day A</td>
+                      {sameDayADailyCounts.map((count, index) => (
+                        <td key={index} className="p-3 text-center border-r border-slate-200 bg-green-100">
+                          <span className="font-bold text-slate-900">
+                            {count}
+                          </span>
+                        </td>
+                      ))}
+                      <td className="p-3 text-center bg-green-100">
+                        <span className="font-bold text-slate-900">
+                          {sameDayAWeekTotal}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })()}
+
+                {/* Total Same Day B */}
+                {(() => {
+                  const sameDayBDailyCounts = currentWeekDays.map(day => {
+                    const dateStr = day.date.toISOString().split('T')[0]
+                    return scheduleData.filter(s => {
+                      if (s.date !== dateStr || !s.tourAssigned) return false
+                      const tourName = s.tourAssigned.toLowerCase()
+                      // Count Cycle B, Cycle A/B, and Cycle B/C
+                      return (tourName.includes('cycle b') && !tourName.includes('cycle a/b') && !tourName.includes('cycle b/c')) ||
+                             tourName.includes('cycle a/b') ||
+                             tourName.includes('cycle b/c') ||
+                             (tourName.includes('same day b') && !tourName.includes('same day a/b') && !tourName.includes('same day b/c'))
+                    }).length
+                  })
+                  const sameDayBWeekTotal = sameDayBDailyCounts.reduce((sum, count) => sum + count, 0)
+                  
+                  return (
+                    <tr className="border-b border-slate-200 bg-green-50">
+                      <td className="p-3 font-bold text-slate-900 border-r border-slate-200">Total Same Day B</td>
+                      {sameDayBDailyCounts.map((count, index) => (
+                        <td key={index} className="p-3 text-center border-r border-slate-200 bg-green-100">
+                          <span className="font-bold text-slate-900">
+                            {count}
+                          </span>
+                        </td>
+                      ))}
+                      <td className="p-3 text-center bg-green-100">
+                        <span className="font-bold text-slate-900">
+                          {sameDayBWeekTotal}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })()}
+
+                {/* Total Same Day C */}
+                {(() => {
+                  const sameDayCDailyCounts = currentWeekDays.map(day => {
+                    const dateStr = day.date.toISOString().split('T')[0]
+                    return scheduleData.filter(s => {
+                      if (s.date !== dateStr || !s.tourAssigned) return false
+                      const tourName = s.tourAssigned.toLowerCase()
+                      // Count Cycle C, Cycle A/C, and Cycle B/C
+                      return (tourName.includes('cycle c') && !tourName.includes('cycle a/c') && !tourName.includes('cycle b/c')) ||
+                             tourName.includes('cycle a/c') ||
+                             tourName.includes('cycle b/c') ||
+                             (tourName.includes('same day c') && !tourName.includes('same day a/c') && !tourName.includes('same day b/c'))
+                    }).length
+                  })
+                  const sameDayCWeekTotal = sameDayCDailyCounts.reduce((sum, count) => sum + count, 0)
+                  
+                  return (
+                    <tr className="border-b-2 border-slate-300 bg-green-50">
+                      <td className="p-3 font-bold text-slate-900 border-r border-slate-200">Total Same Day C</td>
+                      {sameDayCDailyCounts.map((count, index) => (
+                        <td key={index} className="p-3 text-center border-r border-slate-200 bg-green-100">
+                          <span className="font-bold text-slate-900">
+                            {count}
+                          </span>
+                        </td>
+                      ))}
+                      <td className="p-3 text-center bg-green-100">
+                        <span className="font-bold text-slate-900">
+                          {sameDayCWeekTotal}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })()}
+
+                {/* Grand Total Row */}
+                {(() => {
+                  const grandTotalDailyCounts = currentWeekDays.map(day => {
+                    const dateStr = day.date.toISOString().split('T')[0]
+                    return scheduleData.filter(s => s.date === dateStr && s.tourAssigned).length
+                  })
+                  const grandTotal = grandTotalDailyCounts.reduce((sum, count) => sum + count, 0)
+                  
+                  return (
+                    <tr className="bg-blue-600 text-white border-b-2 border-blue-700">
+                      <td className="p-4 font-bold border-r border-blue-500">Total (Next Day + Same Day)</td>
+                      {grandTotalDailyCounts.map((count, index) => (
+                        <td key={index} className="p-4 text-center border-r border-blue-500">
+                          <span className="font-bold text-lg">
+                            {count}
+                          </span>
+                        </td>
+                      ))}
+                      <td className="p-4 text-center">
+                        <span className="font-bold text-xl">
+                          {grandTotal}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })()}
+              </tbody>
+            </table>
           </div>
         </div>
 
-        {/* Simple Legend & Stats */}
-        <div className="bg-slate-50 p-6 border-t border-slate-200">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Status Legend */}
-            <div>
-              <h4 className="font-semibold text-slate-700 mb-3">Status Legend</h4>
-              <div className="flex flex-wrap gap-3">
-                {[
-                  { status: 'available', label: 'Available', color: 'bg-emerald-100 text-emerald-700' },
-                  { status: 'scheduled', label: 'Scheduled', color: 'bg-blue-100 text-blue-700' },
-                  { status: 'holiday', label: 'Holiday', color: 'bg-amber-100 text-amber-700' },
-                  { status: 'sick', label: 'Sick', color: 'bg-rose-100 text-rose-700' },
-                  { status: 'unavailable', label: 'Unavailable', color: 'bg-slate-100 text-slate-700' }
-                ].map(({ status, label, color }) => (
-                  <div key={status} className="flex items-center gap-2">
-                    <div className={cn("w-4 h-4 rounded", color)}></div>
-                    <span className="text-sm text-slate-600">{label}</span>
-                  </div>
-                ))}
+        {/* Month View Placeholder */}
+        {view === 'month' && (
+          <div className="bg-white rounded-lg border border-slate-200 p-8">
+            <div className="text-center">
+              <CalendarDays className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">Month View</h3>
+              <p className="text-slate-600">Monthly schedule view coming soon</p>
+            </div>
+          </div>
+        )}
+
+        {/* Quarter View Placeholder */}
+        {view === 'quarter' && (
+          <div className="bg-white rounded-lg border border-slate-200 p-8">
+            <div className="text-center">
+              <Truck className="h-12 w-12 text-slate-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-slate-900 mb-2">Quarter View</h3>
+              <p className="text-slate-600">Quarterly planning view coming soon</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Reset Confirmation Modal */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-sm mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Reset Schedule</h3>
+                <p className="text-sm text-slate-600">This action cannot be undone</p>
               </div>
             </div>
-
-            {/* Quick Stats */}
-            <div>
-              <h4 className="font-semibold text-slate-700 mb-3">Week Summary</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center">
-                  <div className="text-lg font-bold text-blue-600">
-                    {scheduleData.filter(s => s.status === 'scheduled').length}
-                  </div>
-                  <div className="text-xs text-slate-600">Scheduled</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-amber-600">
-                    {scheduleData.filter(s => s.status === 'holiday').length}
-                  </div>
-                  <div className="text-xs text-slate-600">On Holiday</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-emerald-600">
-                    {scheduleData.filter(s => s.status === 'available').length}
-                  </div>
-                  <div className="text-xs text-slate-600">Available</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-rose-600">
-                    {scheduleData.filter(s => ['sick', 'unavailable'].includes(s.status)).length}
-                  </div>
-                  <div className="text-xs text-slate-600">Unavailable</div>
-                </div>
-              </div>
+            <p className="text-slate-700 mb-6">
+              Are you sure you want to reset all schedule assignments for this week? All drivers will be set back to "Available" status with no tour assignments.
+            </p>
+            <div className="flex gap-3">
+              <Button 
+                variant="destructive" 
+                onClick={confirmResetSchedule}
+                className="flex-1"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Reset Schedule
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowResetConfirm(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
             </div>
           </div>
         </div>
-      </div>
-      </div>
+      )}
+
+      {/* Work Pattern Configuration Modal */}
+      {showWorkPatternModal && selectedDriverForPattern && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-slate-900 mb-4">
+              Configure Work Pattern for {selectedDriverForPattern.name}
+            </h3>
+            
+            <WorkPatternForm 
+              driver={selectedDriverForPattern}
+              workingTours={workingTours}
+              onSave={saveWorkPattern}
+              onCancel={() => {
+                setShowWorkPatternModal(false)
+                setSelectedDriverForPattern(null)
+              }}
+              onDelete={deleteWorkPattern}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-900">Import Schedule</h3>
+                <button
+                  onClick={() => setShowImportModal(false)}
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
+                  aria-label="Close import modal"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Week Offset (0 = current week, 1 = next week, -1 = previous week)
+                </label>
+                <input
+                  type="number"
+                  value={importWeekOffset}
+                  onChange={(e) => setImportWeekOffset(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="1"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Schedule JSON Data
+                </label>
+                <textarea
+                  value={importData}
+                  onChange={(e) => setImportData(e.target.value)}
+                  className="w-full h-64 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                  placeholder="Paste exported schedule JSON here..."
+                />
+              </div>
+              
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-1">Holiday Integration</p>
+                    <p>The import will automatically check for approved holiday requests in the target week and set drivers to "Holiday" status on those dates.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowImportModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={importSchedule}
+                disabled={!importData.trim()}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Import Schedule
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

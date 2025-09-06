@@ -118,6 +118,22 @@ export async function initializeDatabase() {
       )
     `)
 
+    // Create driver work patterns table
+    await dbRun(`
+      CREATE TABLE IF NOT EXISTS driver_work_patterns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        driver_id INTEGER NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('monday-friday', 'mixed-tours', 'specific-tour-only', 'monday-friday-mixed', 'custom')),
+        work_days TEXT, -- JSON string for custom work days
+        allowed_tours TEXT, -- JSON string for allowed tour names
+        preferred_tour TEXT, -- For specific-tour-only type
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (driver_id) REFERENCES drivers(id),
+        UNIQUE(driver_id)
+      )
+    `)
+
     // Create warning_categories table
     await dbRun(`
       CREATE TABLE IF NOT EXISTS warning_categories (
@@ -256,7 +272,82 @@ export async function initializeDatabase() {
       )
     `)
 
+    // Create performance_metrics table for tracking delivery performance
+    await dbRun(`
+      CREATE TABLE IF NOT EXISTS performance_metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        driver_id INTEGER NOT NULL,
+        driver_name TEXT NOT NULL,
+        delivery_associate_id TEXT,
+        week TEXT NOT NULL,
+        delivered_packages INTEGER DEFAULT 0,
+        packages_dnr INTEGER DEFAULT 0,
+        dnr_dpmo INTEGER DEFAULT 0,
+        dispatched_packages INTEGER DEFAULT 0,
+        packages_rts INTEGER DEFAULT 0,
+        rts_percentage REAL DEFAULT 0,
+        rts_dpmo INTEGER DEFAULT 0,
+        -- Additional performance metrics
+        dcr_percentage REAL DEFAULT 0,
+        lor_dpmo INTEGER DEFAULT 0,
+        pod_percentage REAL DEFAULT 0,
+        cc_percentage REAL DEFAULT 0,
+        ce_percentage REAL DEFAULT 0,
+        cdf_percentage REAL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (driver_id) REFERENCES drivers(id),
+        UNIQUE(driver_id, week)
+      )
+    `)
+
     console.log('✅ Database tables created successfully')
+    
+    // Migrate performance_metrics table to add extended performance fields
+    try {
+      // Check if extended performance columns exist
+      const tableInfo = await dbAll(`PRAGMA table_info(performance_metrics)`)
+      const columnNames = tableInfo.map((col: any) => col.name)
+      
+      const requiredColumns = [
+        'dcr_percentage',
+        'lor_dpmo', 
+        'pod_percentage',
+        'cc_percentage',
+        'ce_percentage',
+        'cdf_percentage'
+      ]
+      
+      for (const column of requiredColumns) {
+        if (!columnNames.includes(column)) {
+          console.log(`Adding missing column: ${column}`)
+          let columnType = 'REAL DEFAULT 0'
+          if (column === 'lor_dpmo') {
+            columnType = 'INTEGER DEFAULT 0'
+          }
+          await dbRun(`ALTER TABLE performance_metrics ADD COLUMN ${column} ${columnType}`)
+        }
+      }
+      
+      console.log('✅ Performance metrics table migration completed')
+    } catch (migrationError) {
+      console.log('⚠️ Performance metrics migration error:', migrationError)
+    }
+    
+    // Migrate drivers table to add delivery_associate_id column
+    try {
+      const driversTableInfo = await dbAll(`PRAGMA table_info(drivers)`)
+      const driversColumnNames = driversTableInfo.map((col: any) => col.name)
+      
+      if (!driversColumnNames.includes('delivery_associate_id')) {
+        console.log('Adding delivery_associate_id column to drivers table')
+        await dbRun(`ALTER TABLE drivers ADD COLUMN delivery_associate_id TEXT`)
+      }
+      
+      console.log('✅ Drivers table migration completed')
+    } catch (migrationError) {
+      console.log('⚠️ Drivers migration error:', migrationError)
+    }
     
     // Migrate holiday_requests table to make email and phone optional
     try {
@@ -465,43 +556,67 @@ async function insertSampleData() {
   const drivers = [
     {
       driver_id: 'DRV-2023-0001',
-      name: 'John Smith',
-      email: 'john.smith@company.com',
-      phone: '+1 234 567 8900',
+      name: 'Alexandru Alin Csibi',
+      email: 'alexandru.csibi@company.com',
+      phone: '+40 234 567 8900',
       license_number: 'DL123456789',
       join_date: '2023-01-15'
     },
     {
       driver_id: 'DRV-2023-0002',
-      name: 'Sarah Johnson',
-      email: 'sarah.johnson@company.com',
-      phone: '+1 234 567 8901',
+      name: 'Andrei Junea',
+      email: 'andrei.junea@company.com',
+      phone: '+40 234 567 8901',
       license_number: 'DL123456790',
       join_date: '2023-03-22'
     },
     {
       driver_id: 'DRV-2022-0003',
-      name: 'Mike Davis',
-      email: 'mike.davis@company.com',
-      phone: '+1 234 567 8902',
+      name: 'Bianca Ursu',
+      email: 'bianca.ursu@company.com',
+      phone: '+40 234 567 8902',
       license_number: 'DL123456791',
       join_date: '2022-11-08'
     },
     {
       driver_id: 'DRV-2024-0004',
-      name: 'Emma Wilson',
-      email: 'emma.wilson@company.com',
-      phone: '+1 234 567 8903',
+      name: 'Arkadii Serozhenko',
+      email: 'arkadii.serozhenko@company.com',
+      phone: '+40 234 567 8903',
       license_number: 'DL123456792',
       join_date: '2024-02-14'
     },
     {
       driver_id: 'DRV-2025-0005',
-      name: 'James Brown',
-      email: 'james.brown@company.com',
-      phone: '+1 234 567 8904',
+      name: 'Kakhi Doborjginidze',
+      email: 'kakhi.doborjginidze@company.com',
+      phone: '+40 234 567 8904',
       license_number: 'DL123456793',
       join_date: '2025-01-03'
+    },
+    {
+      driver_id: 'DRV-2024-0006',
+      name: 'Catalin Roscoban',
+      email: 'catalin.roscoban@company.com',
+      phone: '+40 234 567 8905',
+      license_number: 'DL123456794',
+      join_date: '2024-06-10'
+    },
+    {
+      driver_id: 'DRV-2023-0007',
+      name: 'Yaroslav Yarovyi',
+      email: 'yaroslav.yarovyi@company.com',
+      phone: '+40 234 567 8906',
+      license_number: 'DL123456795',
+      join_date: '2023-08-20'
+    },
+    {
+      driver_id: 'DRV-2024-0008',
+      name: 'Dan Cupet',
+      email: 'dan.cupet@company.com',
+      phone: '+40 234 567 8907',
+      license_number: 'DL123456796',
+      join_date: '2024-01-15'
     }
   ]
 

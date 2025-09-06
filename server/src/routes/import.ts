@@ -116,39 +116,34 @@ router.post('/drivers', upload.single('csv'), async (req, res) => {
               // Insert drivers into database
               for (const driver of drivers) {
                 try {
-                  // Check if driver already exists
+                  // Check if driver already exists by driver_id or email
                   const existing = await dbGet(
-                    'SELECT id FROM drivers WHERE driver_id = ? OR email = ?',
+                    'SELECT id, driver_id FROM drivers WHERE driver_id = ? OR email = ?',
                     [driver.driver_id, driver.email]
                   )
                   
                   if (existing) {
-                    // Update existing driver
-                    await dbRun(`
-                      UPDATE drivers 
-                      SET name = ?, email = ?, phone = ?, license_number = ?, status = ?, 
-                          employment_type = ?, annual_vacation_days = ?, updated_at = datetime('now')
-                      WHERE driver_id = ?
-                    `, [
-                      driver.name, driver.email, driver.phone, driver.license_number,
-                      driver.status, driver.employment_type, driver.annual_vacation_days,
-                      driver.driver_id
-                    ])
-                    results.updated++
-                  } else {
-                    // Insert new driver
-                    await dbRun(`
-                      INSERT INTO drivers (
-                        driver_id, name, email, phone, license_number, status, 
-                        join_date, employment_type, annual_vacation_days, used_vacation_days
-                      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `, [
-                      driver.driver_id, driver.name, driver.email, driver.phone,
-                      driver.license_number, driver.status, driver.join_date,
-                      driver.employment_type, driver.annual_vacation_days, 0
-                    ])
-                    results.imported++
+                    // Skip existing driver - don't update or import
+                    results.errors.push({
+                      row: drivers.indexOf(driver) + 1,
+                      name: driver.name,
+                      error: `Driver already exists with ID: ${existing.driver_id} - skipped to prevent duplication`
+                    })
+                    continue
                   }
+                  
+                  // Insert new driver only if they don't exist
+                  await dbRun(`
+                    INSERT INTO drivers (
+                      driver_id, name, email, phone, license_number, status, 
+                      join_date, employment_type, annual_vacation_days, used_vacation_days
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  `, [
+                    driver.driver_id, driver.name, driver.email, driver.phone,
+                    driver.license_number, driver.status, driver.join_date,
+                    driver.employment_type, driver.annual_vacation_days, 0
+                  ])
+                  results.imported++
                 } catch (dbError: any) {
                   results.errors.push({
                     row: drivers.indexOf(driver) + 1,
@@ -174,7 +169,7 @@ router.post('/drivers', upload.single('csv'), async (req, res) => {
     await processCSV()
 
     // Send response
-    if (results.errors.length > 0 && results.imported === 0 && results.updated === 0) {
+    if (results.errors.length > 0 && results.imported === 0) {
       return res.status(400).json({
         error: 'Import failed',
         results,
@@ -182,9 +177,13 @@ router.post('/drivers', upload.single('csv'), async (req, res) => {
       })
     }
 
+    const message = results.imported > 0 
+      ? `Import completed successfully. ${results.imported} new drivers imported.${results.errors.length > 0 ? ` ${results.errors.length} drivers were skipped (already exist).` : ''}`
+      : `No new drivers imported. ${results.errors.length} drivers were skipped (already exist).`
+
     res.json({
-      message: `Import completed successfully. ${results.imported} drivers imported, ${results.updated} drivers updated.`,
-      imported: results.imported + results.updated,
+      message,
+      imported: results.imported,
       results
     })
 
@@ -235,44 +234,39 @@ router.post('/drivers/bulk', async (req, res) => {
 
         // Check if driver already exists by driver_id
         const existingDriver = await dbGet(
-          'SELECT id FROM drivers WHERE driver_id = ?',
+          'SELECT id, driver_id FROM drivers WHERE driver_id = ?',
           [driverData.driver_id]
         )
 
         if (existingDriver) {
-          // Update existing driver
-          await dbRun(`
-            UPDATE drivers 
-            SET name = ?, email = ?, phone = ?, updated_at = datetime('now')
-            WHERE driver_id = ?
-          `, [
-            driverData.name,
-            driverData.email || `${driverData.driver_id.toLowerCase()}@company.com`,
-            driverData.phone || '+49000000000',
-            driverData.driver_id
-          ])
-          results.updated++
-        } else {
-          // Insert new driver
-          await dbRun(`
-            INSERT INTO drivers (
-              driver_id, name, email, phone, license_number, status, 
-              join_date, employment_type, annual_vacation_days, used_vacation_days
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `, [
-            driverData.driver_id,
-            driverData.name,
-            driverData.email || `${driverData.driver_id.toLowerCase()}@company.com`,
-            driverData.phone || '+49000000000',
-            driverData.license_number || `LIC-${driverData.driver_id}`,
-            driverData.status || 'Active',
-            driverData.join_date || new Date().toISOString().split('T')[0],
-            driverData.employment_type || 'Fulltime',
-            driverData.annual_vacation_days || 25,
-            0
-          ])
-          results.imported++
+          // Skip existing driver - don't update or import
+          results.errors.push({
+            row: i + 1,
+            name: driverData.name,
+            error: `Driver already exists with ID: ${existingDriver.driver_id} - skipped to prevent duplication`
+          })
+          continue
         }
+        
+        // Insert new driver only if they don't exist
+        await dbRun(`
+          INSERT INTO drivers (
+            driver_id, name, email, phone, license_number, status, 
+            join_date, employment_type, annual_vacation_days, used_vacation_days
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          driverData.driver_id,
+          driverData.name,
+          driverData.email || `${driverData.driver_id.toLowerCase()}@company.com`,
+          driverData.phone || '+49000000000',
+          driverData.license_number || `LIC-${driverData.driver_id}`,
+          driverData.status || 'Active',
+          driverData.join_date || new Date().toISOString().split('T')[0],
+          driverData.employment_type || 'Fulltime',
+          driverData.annual_vacation_days || 25,
+          0
+        ])
+        results.imported++
       } catch (error) {
         results.errors.push({
           row: i + 1,
@@ -342,44 +336,39 @@ router.post('/drivers/csv', upload.single('csvFile'), async (req, res) => {
 
         // Check if driver already exists
         const existingDriver = await dbGet(
-          'SELECT id FROM drivers WHERE driver_id = ?',
+          'SELECT id, driver_id FROM drivers WHERE driver_id = ?',
           [driverData.driver_id]
         )
 
         if (existingDriver) {
-          // Update existing driver
-          await dbRun(`
-            UPDATE drivers 
-            SET name = ?, email = ?, phone = ?, updated_at = datetime('now')
-            WHERE driver_id = ?
-          `, [
-            driverData.name,
-            driverData.email,
-            driverData.phone,
-            driverData.driver_id
-          ])
-          results.updated++
-        } else {
-          // Insert new driver
-          await dbRun(`
-            INSERT INTO drivers (
-              driver_id, name, email, phone, license_number, status, 
-              join_date, employment_type, annual_vacation_days, used_vacation_days
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `, [
-            driverData.driver_id,
-            driverData.name,
-            driverData.email,
-            driverData.phone,
-            driverData.license_number,
-            driverData.status,
-            driverData.join_date,
-            driverData.employment_type,
-            driverData.annual_vacation_days,
-            0
-          ])
-          results.imported++
+          // Skip existing driver - don't update or import
+          results.errors.push({
+            row: i + 2, // +2 because CSV has header row and arrays are 0-indexed
+            name: driverData.name,
+            error: `Driver already exists with ID: ${existingDriver.driver_id} - skipped to prevent duplication`
+          })
+          continue
         }
+        
+        // Insert new driver only if they don't exist
+        await dbRun(`
+          INSERT INTO drivers (
+            driver_id, name, email, phone, license_number, status, 
+            join_date, employment_type, annual_vacation_days, used_vacation_days
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          driverData.driver_id,
+          driverData.name,
+          driverData.email,
+          driverData.phone,
+          driverData.license_number,
+          driverData.status,
+          driverData.join_date,
+          driverData.employment_type,
+          driverData.annual_vacation_days,
+          0
+        ])
+        results.imported++
       } catch (error) {
         results.errors.push({
           row: i + 2, // +2 because CSV has header row and arrays are 0-indexed

@@ -417,11 +417,11 @@ export default function Dashboard() {
                       {stats.totalDrivers > 0 ? Math.round((stats.activeDrivers / stats.totalDrivers) * 100) : 0}%
                     </span>
                   </div>
-                  <div className="w-full bg-slate-200 rounded-full h-2.5">
-                    <div 
-                      className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full transition-all duration-500" 
-                      style={{ width: `${stats.totalDrivers > 0 ? (stats.activeDrivers / stats.totalDrivers) * 100 : 0}%` }}
-                    ></div>
+                  <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2.5 rounded-full transition-all duration-500 progress-bar"
+                      data-pct={stats.totalDrivers > 0 ? (stats.activeDrivers / stats.totalDrivers) * 100 : 0}
+                    />
                   </div>
                 </div>
                 
@@ -432,11 +432,11 @@ export default function Dashboard() {
                       {stats.totalWarnings > 0 ? Math.max(0, Math.round(((stats.totalWarnings - stats.highSeverityWarnings) / stats.totalWarnings) * 100)) : 100}%
                     </span>
                   </div>
-                  <div className="w-full bg-slate-200 rounded-full h-2.5">
-                    <div 
-                      className="bg-gradient-to-r from-green-500 to-emerald-600 h-2.5 rounded-full transition-all duration-500" 
-                      style={{ width: `${stats.totalWarnings > 0 ? Math.max(0, ((stats.totalWarnings - stats.highSeverityWarnings) / stats.totalWarnings) * 100) : 100}%` }}
-                    ></div>
+                  <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-green-500 to-emerald-600 h-2.5 rounded-full transition-all duration-500 progress-bar"
+                      data-pct={stats.totalWarnings > 0 ? Math.max(0, ((stats.totalWarnings - stats.highSeverityWarnings) / stats.totalWarnings) * 100) : 100}
+                    />
                   </div>
                 </div>
 

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import ImportDriverModal from '@/components/drivers/ImportDriverModal'
+import ImportPerformanceModal from '@/components/drivers/ImportPerformanceModal'
 import SearchAndFilter from '@/components/common/SearchAndFilter'
 import ExportButton from '@/components/common/ExportButton'
 import MobilePagination from '@/components/common/MobilePagination'
@@ -54,6 +55,7 @@ export default function Drivers() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [employmentFilter, setEmploymentFilter] = useState<string>('all')
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showPerformanceImportModal, setShowPerformanceImportModal] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const queryClient = useQueryClient()
 
@@ -235,6 +237,14 @@ export default function Drivers() {
               >
                 <Upload className="mr-2 h-4 w-4" />
                 {t('drivers.importDrivers')}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setShowPerformanceImportModal(true)}
+                className="border-slate-300 hover:border-purple-300 hover:bg-purple-50 w-full sm:w-auto"
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Import Performance
               </Button>
             </div>
             <Button 
@@ -602,6 +612,10 @@ export default function Drivers() {
       <ImportDriverModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
+      />
+      <ImportPerformanceModal
+        isOpen={showPerformanceImportModal}
+        onClose={() => setShowPerformanceImportModal(false)}
       />
     </div>
   )

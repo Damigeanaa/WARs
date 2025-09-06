@@ -21,6 +21,7 @@ import SchedulePlannerPage from '@/pages/SchedulePlannerPage'
 import ScheduleSettingsPage from '@/pages/ScheduleSettingsPage'
 import TimesheetIntegrationPage from '@/pages/TimesheetIntegrationPage'
 import ProjectSettingsPage from '@/pages/ProjectSettingsPage'
+import WeeklyPerformancePage from '@/pages/WeeklyPerformancePage'
 
 function App() {
   return (
@@ -70,6 +71,13 @@ function App() {
           <ProtectedRoute adminOnly={true}>
             <Layout>
               <EditDriver />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/performance" element={
+          <ProtectedRoute adminOnly={true}>
+            <Layout>
+              <WeeklyPerformancePage />
             </Layout>
           </ProtectedRoute>
         } />

@@ -72,12 +72,41 @@ export default function ScheduleSettingsPage() {
     fetchWorkingTours()
   }, [])
 
+  // Hydrate color swatches since inline styles were removed for linting.
+  // We manually apply background colors based on data-color attributes.
+  useEffect(() => {
+    const applyColors = () => {
+      const swatches = document.querySelectorAll<HTMLElement>('.tour-color-swatch[data-color]:not([data-color-applied])')
+      swatches.forEach(el => {
+        const color = el.getAttribute('data-color')
+        if (color) {
+          el.style.setProperty('--_dynamic-color', color)
+          el.setAttribute('data-color-applied', 'true')
+        }
+      })
+
+      const buttons = document.querySelectorAll<HTMLElement>('button[data-color]:not([data-color-applied])')
+      buttons.forEach(el => {
+        const color = el.getAttribute('data-color')
+        if (color) {
+          el.style.setProperty('--_dynamic-color', color)
+          el.setAttribute('data-color-applied', 'true')
+        }
+      })
+    }
+    applyColors()
+  }, [workingTours, editingTour, newTour])
+
   const fetchWorkingTours = async () => {
     try {
       const response = await fetch(API_ENDPOINTS.workingTours)
       if (response.ok) {
         const data = await response.json()
-        setWorkingTours(data)
+        // Normalize null descriptions to empty strings for form safety
+        setWorkingTours(data.map((t: any) => ({
+          ...t,
+          description: t.description ?? ''
+        })))
       } else {
         // If no tours exist, initialize with defaults
         await initializeDefaultTours()
@@ -119,21 +148,53 @@ export default function ScheduleSettingsPage() {
       const method = tour.id ? 'PUT' : 'POST'
       const url = tour.id ? API_ENDPOINTS.workingTourById(tour.id.toString()) : API_ENDPOINTS.workingTours
       
+      // Sanitize payload: Zod schema doesn't accept null for description; omit if empty
+      const payload: any = {
+        name: tour.name?.trim() || '',
+        color: tour.color,
+        is_active: tour.is_active !== false
+      }
+      if (tour.description && tour.description.trim().length > 0) {
+        payload.description = tour.description.trim()
+      }
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(tour)
+        body: JSON.stringify(payload)
       })
-
-      if (!response.ok) throw new Error('Failed to save tour')
+      if (!response.ok) {
+        // Try to extract detailed error for better UX
+        let message = 'Failed to save working tour'
+        try {
+          const data = await response.json()
+          if (data?.error) {
+            message = data.error
+          }
+          // Validation errors from Zod
+          if (data?.details && Array.isArray(data.details)) {
+            const first = data.details[0]
+            if (first?.message) {
+              let detailMsg = first.message
+              if (first.path?.[0] === 'description' && first.message.includes('Expected string')) {
+                detailMsg = 'Description must be text. Leave it blank instead of null.'
+              }
+              message += `: ${detailMsg}`
+            }
+          }
+        } catch {
+          // ignore JSON parse errors
+        }
+        throw new Error(message)
+      }
 
       const savedTour = await response.json()
       
       if (tour.id) {
-        setWorkingTours(prev => prev.map(t => t.id === tour.id ? savedTour : t))
+  setWorkingTours(prev => prev.map(t => t.id === tour.id ? { ...savedTour, description: savedTour.description ?? '' } : t))
         setEditingTour(null)
       } else {
-        setWorkingTours(prev => [...prev, savedTour])
+  setWorkingTours(prev => [...prev, { ...savedTour, description: savedTour.description ?? '' }])
         setNewTour({ name: '', description: '', color: defaultColors[0], is_active: true })
         setShowAddForm(false)
       }
@@ -144,9 +205,10 @@ export default function ScheduleSettingsPage() {
       })
     } catch (error) {
       console.error('Error saving tour:', error)
+      const message = error instanceof Error ? error.message : 'Failed to save working tour'
       toast({
         title: 'Error',
-        description: 'Failed to save working tour',
+        description: message,
         variant: 'destructive'
       })
     }
@@ -326,7 +388,7 @@ export default function ScheduleSettingsPage() {
                     <div>
                       <p className="text-xs font-medium text-slate-600 mb-2">Quick Colors</p>
                       <div className="grid grid-cols-8 gap-2">
-                        {defaultColors.map((color) => (
+            {defaultColors.map((color) => (
                           <button
                             key={color}
                             onClick={() => setNewTour(prev => ({ ...prev, color }))}
@@ -336,7 +398,7 @@ export default function ScheduleSettingsPage() {
                                 ? "border-slate-600 ring-2 ring-slate-300 shadow-lg" 
                                 : "border-slate-200 hover:border-slate-400"
                             )}
-                            style={{ backgroundColor: color }}
+                            data-color={color}
                             title={`Quick select ${color}`}
                             aria-label={`Quick select color ${color}`}
                           >
@@ -438,7 +500,7 @@ export default function ScheduleSettingsPage() {
                           </div>
                           {/* Quick Colors for Edit */}
                           <div className="flex gap-1">
-                            {defaultColors.slice(0, 8).map((color) => (
+              {defaultColors.slice(0, 8).map((color) => (
                               <button
                                 key={color}
                                 onClick={() => setEditingTour(prev => prev ? { ...prev, color } : null)}
@@ -446,7 +508,7 @@ export default function ScheduleSettingsPage() {
                                   "w-7 h-7 rounded border-2 transition-all hover:scale-110",
                                   editingTour.color === color ? "border-slate-600 ring-1 ring-slate-300" : "border-slate-200"
                                 )}
-                                style={{ backgroundColor: color }}
+                                data-color={color}
                                 title={`Quick select ${color}`}
                                 aria-label={`Quick select color ${color}`}
                               >
@@ -497,8 +559,8 @@ export default function ScheduleSettingsPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div
-                        className="w-12 h-12 rounded-lg border-2 border-white shadow-lg flex items-center justify-center"
-                        style={{ backgroundColor: tour.color }}
+                        className="w-12 h-12 rounded-lg border-2 border-white shadow-lg flex items-center justify-center tour-color-swatch"
+                        data-color={tour.color}
                         title={`Tour color: ${tour.color}`}
                       >
                         <Truck className="h-6 w-6 text-white" />

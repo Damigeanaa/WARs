@@ -43,7 +43,7 @@ export default function AddDriver() {
   const navigate = useNavigate()
   const { toast } = useToast()
   const queryClient = useQueryClient()
-  const { data: settings, isLoading: settingsLoading } = useProjectSettings()
+  const { data: settings } = useProjectSettings()
 
   const [formData, setFormData] = useState<DriverFormData>({
     name: '',
