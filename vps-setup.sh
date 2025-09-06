@@ -340,13 +340,23 @@ fi
 
 # Generate secure JWT secret automatically
 print_status "Generating secure JWT secret..."
-JWT_SECRET=$(openssl rand -base64 64 | tr -d "=+/" | cut -c1-64)
+JWT_SECRET=$(openssl rand -hex 32)
 
 # Update environment for production
 sed -i 's/NODE_ENV=development/NODE_ENV=production/' .env
 sed -i 's/HOST=localhost/HOST=0.0.0.0/' .env
 sed -i 's|DATABASE_PATH=./database.db|DATABASE_PATH=/var/www/driver-management/server/database.db|' .env
-sed -i "s|JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|" .env
+
+# Use a safer method to update JWT_SECRET to avoid sed issues with special characters
+if grep -q "JWT_SECRET=" .env; then
+    # Replace existing JWT_SECRET line
+    grep -v "JWT_SECRET=" .env > .env.tmp
+    echo "JWT_SECRET=$JWT_SECRET" >> .env.tmp
+    mv .env.tmp .env
+else
+    # Add JWT_SECRET if it doesn't exist
+    echo "JWT_SECRET=$JWT_SECRET" >> .env
+fi
 
 # Configure CORS and domain settings
 if [ -n "$DOMAIN_NAME" ]; then
@@ -364,7 +374,15 @@ if [ -f "server/.env.example" ] && [ ! -f "server/.env" ]; then
     sed -i 's/NODE_ENV=development/NODE_ENV=production/' server/.env
     sed -i 's/HOST=localhost/HOST=0.0.0.0/' server/.env
     sed -i 's|DATABASE_PATH=./database.db|DATABASE_PATH=/var/www/driver-management/server/database.db|' server/.env
-    sed -i "s|JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|" server/.env
+    
+    # Use safer method for JWT_SECRET in server/.env too
+    if grep -q "JWT_SECRET=" server/.env; then
+        grep -v "JWT_SECRET=" server/.env > server/.env.tmp
+        echo "JWT_SECRET=$JWT_SECRET" >> server/.env.tmp
+        mv server/.env.tmp server/.env
+    else
+        echo "JWT_SECRET=$JWT_SECRET" >> server/.env
+    fi
 fi
 
 print_success "Environment configured with secure JWT secret"
