@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { useToast } from '@/hooks/use-toast'
-import { Upload, FileText, AlertCircle, CheckCircle, Download, X, Database, Clipboard } from 'lucide-react'
+import { Upload, FileText, CheckCircle, X, Database, Clipboard } from 'lucide-react'
 
 interface ImportPerformanceModalProps {
   isOpen: boolean

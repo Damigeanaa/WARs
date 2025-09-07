@@ -19,8 +19,8 @@ import auditLogsRouter from './routes/auditLogs.js'
 import { schedulesRouter } from './routes/schedules.js'
 import { workingToursRouter } from './routes/workingTours.js'
 import { workPatternsRouter } from './routes/workPatterns.js'
-import timesheetRouter from './routes/timesheet.js'
-import settingsRouter from './routes/settings.js'
+// import timesheetRouter from './routes/timesheet.js'
+// import settingsRouter from './routes/settings.js'
 import { initializeDatabase } from './database/init.js'
 import { auditMiddleware, extractUserForAudit } from './middleware/auditLogger.js'
 import { errorHandler } from './utils/validation.js'
@@ -65,8 +65,8 @@ app.use('/api/work-patterns', workPatternsRouter)
 app.use('/api/analytics', analyticsRouter)
 app.use('/api/audit-logs', auditLogsRouter)
 app.use('/api/import', importRouter)
-app.use('/api/timesheet', timesheetRouter)
-app.use('/api/settings', settingsRouter)
+// app.use('/api/timesheet', timesheetRouter)
+// app.use('/api/settings', settingsRouter)
 
 // Health check
 app.get('/api/health', (req, res) => {
